@@ -38,6 +38,7 @@
 #include "platform/android/activity/JNIXBMCSurfaceTextureOnFrameAvailableListener.h"
 #include "platform/android/activity/XBMCApp.h"
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <memory>

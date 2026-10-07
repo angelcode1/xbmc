@@ -26,6 +26,8 @@ extern "C"
       pData = nullptr;
       iSize = 0;
       iStreamId = -1;
+      isDualStream = false;
+      isELPackage = false;
       demuxerId = -1;
       iGroupId = -1;
 
@@ -43,6 +45,10 @@ extern "C"
 
     //! @brief PTS offset correction applied to the PTS and DTS.
     double m_ptsOffsetCorrection{0};
+    //! @brief Packet belongs to a Dolby Vision dual-layer stream.
+    bool isDualStream{false};
+    //! @brief Packet carries the Dolby Vision enhancement layer.
+    bool isELPackage{false};
   };
 
 #ifdef __cplusplus

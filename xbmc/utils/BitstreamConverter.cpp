@@ -334,6 +334,7 @@ CBitstreamConverter::CBitstreamConverter()
   m_removeDovi = false;
   m_removeHdr10Plus = false;
   m_setDoviZeroLevel5 = false;
+  m_combine = false;
 }
 
 CBitstreamConverter::~CBitstreamConverter()
@@ -514,6 +515,7 @@ void CBitstreamConverter::Close()
   m_convert_bitstream = false;
   m_convert_bytestream = false;
   m_convert_3byteTo4byteNALSize = false;
+  m_combine = false;
 }
 
 bool CBitstreamConverter::Convert(uint8_t* pData, int iSize)
@@ -624,9 +626,141 @@ bool CBitstreamConverter::Convert(uint8_t* pData, int iSize)
   return false;
 }
 
+bool CBitstreamConverter::Convert(uint8_t* pData_bl,
+                                  int iSize_bl,
+                                  uint8_t* pData_el,
+                                  int iSize_el)
+{
+  if (m_convertBuffer)
+  {
+    av_free(m_convertBuffer);
+    m_convertBuffer = nullptr;
+  }
+  m_inputSize = 0;
+  m_convertSize = 0;
+  m_inputBuffer = nullptr;
+  m_combine = false;
+
+  if (!pData_bl || !pData_el || iSize_bl <= 0 || iSize_el <= 0)
+    return false;
+
+  int offset = 0;
+  uint32_t size_eos = 0;
+  uint8_t* buf = nullptr;
+  uint8_t* end = nullptr;
+  uint8_t* start = nullptr;
+  uint8_t* buf_eos = nullptr;
+
+  uint32_t bl_frame_nal_buf_size = static_cast<uint32_t>(iSize_bl);
+  uint32_t el_frame_nal_buf_size = static_cast<uint32_t>(iSize_el);
+
+  if (!m_convert_bitstream)
+  {
+    AVIOContext* pb = nullptr;
+    if (avio_open_dyn_buf(&pb) < 0)
+      return false;
+
+    bl_frame_nal_buf_size = avc_parse_nal_units(pb, pData_bl, iSize_bl);
+    el_frame_nal_buf_size = avc_parse_nal_units(pb, pData_el, iSize_el);
+    avio_close_dyn_buf(pb, &buf);
+  }
+  else
+  {
+    buf = pData_bl;
+  }
+
+  if (!buf)
+    return false;
+
+  // Base layer first.
+  start = buf;
+  end = buf + bl_frame_nal_buf_size;
+  while (end - buf > 4)
+  {
+    uint32_t size = std::min<uint32_t>(AV_RB32(buf), end - buf - 4);
+    buf += 4;
+    if (size == 0 || buf + size > end)
+      break;
+
+    const uint8_t nal_type = (buf[0] >> 1) & 0x3f;
+    if (nal_type != AVC_NAL_END_SEQUENCE)
+      BitstreamAllocAndCopy(&m_convertBuffer, &offset, nullptr, 0, buf, size, nal_type);
+    else
+    {
+      buf_eos = buf;
+      size_eos = size;
+    }
+
+    CLog::Log(LOGDEBUG, LOGVIDEO,
+              "CBitstreamConverter::ConvertFEL BL nal_type:{} size:{}", nal_type, size);
+    buf += size;
+  }
+
+  if (m_convert_bitstream)
+    buf = pData_el;
+
+  // Enhancement layer. RPU stays NAL 62. Other EL NALs are presented to
+  // the Amlogic Dolby decoder as NAL 63, matching the CoreELEC path.
+  end = buf + el_frame_nal_buf_size;
+  while (end - buf > 4)
+  {
+    uint32_t size = std::min<uint32_t>(AV_RB32(buf), end - buf - 4);
+    buf += 4;
+    if (size == 0 || buf + size > end)
+      break;
+
+    const uint8_t nal_type = (buf[0] >> 1) & 0x3f;
+
+    if (nal_type == HEVC_NAL_UNSPEC62)
+    {
+      const uint8_t* rpu_ptr = buf;
+#ifdef HAVE_LIBDOVI
+      const DoviData* rpu_data = processDoviRpu(buf, size);
+      if (rpu_data)
+      {
+        rpu_ptr = rpu_data->data;
+        size = rpu_data->len;
+      }
+#endif
+      BitstreamAllocAndCopy(&m_convertBuffer, &offset, nullptr, 0, rpu_ptr, size,
+                            HEVC_NAL_UNSPEC62);
+#ifdef HAVE_LIBDOVI
+      if (rpu_data)
+        dovi_data_free(rpu_data);
+#endif
+    }
+    else if (!m_convert_dovi)
+    {
+      BitstreamAllocAndCopy(&m_convertBuffer, &offset, nullptr, 0, buf, size,
+                            HEVC_NAL_UNSPEC63);
+    }
+
+    if (!m_convert_dovi || nal_type == HEVC_NAL_UNSPEC62)
+      CLog::Log(LOGDEBUG, LOGVIDEO,
+                "CBitstreamConverter::ConvertFEL EL nal_type:{} size:{}", nal_type, size);
+
+    buf += size;
+  }
+
+  if (buf_eos)
+    BitstreamAllocAndCopy(&m_convertBuffer, &offset, nullptr, 0, buf_eos, size_eos,
+                          AVC_NAL_END_SEQUENCE);
+
+  if (!m_convert_bitstream)
+    av_free(start);
+
+  m_convertSize = offset;
+  m_combine = m_convertBuffer != nullptr && m_convertSize > 0;
+
+  CLog::Log(LOGDEBUG, LOGVIDEO,
+            "CBitstreamConverter::ConvertFEL combined BL:{} EL:{} -> {} bytes",
+            iSize_bl, iSize_el, m_convertSize);
+  return m_combine;
+}
+
 uint8_t* CBitstreamConverter::GetConvertBuffer() const
 {
-  if ((m_convert_bitstream || m_convert_bytestream || m_convert_3byteTo4byteNALSize) &&
+  if ((m_convert_bitstream || m_convert_bytestream || m_convert_3byteTo4byteNALSize || m_combine) &&
       m_convertBuffer != NULL)
     return m_convertBuffer;
   else
@@ -635,7 +769,7 @@ uint8_t* CBitstreamConverter::GetConvertBuffer() const
 
 int CBitstreamConverter::GetConvertSize() const
 {
-  if ((m_convert_bitstream || m_convert_bytestream || m_convert_3byteTo4byteNALSize) &&
+  if ((m_convert_bitstream || m_convert_bytestream || m_convert_3byteTo4byteNALSize || m_combine) &&
       m_convertBuffer != NULL)
     return m_convertSize;
   else

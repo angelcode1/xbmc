@@ -644,7 +644,7 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
   if (!pData_bl || !pData_el || iSize_bl <= 0 || iSize_el <= 0)
     return false;
 
-  int offset = 0;
+  uint32_t offset = 0;
   uint32_t size_eos = 0;
   uint8_t* buf = nullptr;
   uint8_t* end = nullptr;
@@ -684,7 +684,7 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
 
     const uint8_t nal_type = (buf[0] >> 1) & 0x3f;
     if (nal_type != AVC_NAL_END_SEQUENCE)
-      BitstreamAllocAndCopy(&m_convertBuffer, &offset, nullptr, 0, buf, size, nal_type);
+      BitstreamAllocAndCopy(&m_convertBuffer, &offset, buf, size, nal_type);
     else
     {
       buf_eos = buf;
@@ -722,7 +722,7 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
         size = rpu_data->len;
       }
 #endif
-      BitstreamAllocAndCopy(&m_convertBuffer, &offset, nullptr, 0, rpu_ptr, size,
+      BitstreamAllocAndCopy(&m_convertBuffer, &offset, rpu_ptr, size,
                             HEVC_NAL_UNSPEC62);
 #ifdef HAVE_LIBDOVI
       if (rpu_data)
@@ -731,7 +731,7 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
     }
     else if (!m_convert_dovi)
     {
-      BitstreamAllocAndCopy(&m_convertBuffer, &offset, nullptr, 0, buf, size,
+      BitstreamAllocAndCopy(&m_convertBuffer, &offset, buf, size,
                             HEVC_NAL_UNSPEC63);
     }
 
@@ -743,7 +743,7 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
   }
 
   if (buf_eos)
-    BitstreamAllocAndCopy(&m_convertBuffer, &offset, nullptr, 0, buf_eos, size_eos,
+    BitstreamAllocAndCopy(&m_convertBuffer, &offset, buf_eos, size_eos,
                           AVC_NAL_END_SEQUENCE);
 
   if (!m_convert_bitstream)
@@ -1213,6 +1213,54 @@ void CBitstreamConverter::BitstreamAllocAndCopy(uint8_t** poutbuf,
     (*poutbuf + offset + sps_pps_size)[0] = 0;
     (*poutbuf + offset + sps_pps_size)[1] = 0;
     (*poutbuf + offset + sps_pps_size)[2] = 1;
+  }
+}
+
+void CBitstreamConverter::BitstreamAllocAndCopy(uint8_t** poutbuf,
+                                                uint32_t* poutbuf_size,
+                                                const uint8_t* in,
+                                                uint32_t in_size,
+                                                uint8_t nal_type)
+{
+  uint32_t offset = *poutbuf_size;
+  uint8_t nal_header_size = offset ? 3 : 4;
+  void* tmp;
+
+  if (nal_type == HEVC_NAL_UNSPEC62)
+    nal_header_size = 4;
+  else if (nal_type == HEVC_NAL_UNSPEC63)
+    nal_header_size = 5;
+
+  *poutbuf_size += in_size + nal_header_size;
+  tmp = av_realloc(*poutbuf, *poutbuf_size);
+  if (!tmp)
+    return;
+  *poutbuf = static_cast<uint8_t*>(tmp);
+
+  memcpy(*poutbuf + nal_header_size + offset, in, in_size);
+
+  if (nal_header_size == 5)
+  {
+    // Dolby Vision EL is carried as an UNSPEC63 NAL. Replace the original
+    // enhancement-layer HEVC header with the Dolby layer wrapper header.
+    (*poutbuf + offset)[0] = 0;
+    (*poutbuf + offset)[1] = 0;
+    (*poutbuf + offset)[2] = 1;
+    (*poutbuf + offset)[3] = HEVC_NAL_UNSPEC63 << 1;
+    (*poutbuf + offset)[4] = 1;
+  }
+  else if (nal_header_size == 4)
+  {
+    (*poutbuf + offset)[0] = 0;
+    (*poutbuf + offset)[1] = 0;
+    (*poutbuf + offset)[2] = 0;
+    (*poutbuf + offset)[3] = 1;
+  }
+  else
+  {
+    (*poutbuf + offset)[0] = 0;
+    (*poutbuf + offset)[1] = 0;
+    (*poutbuf + offset)[2] = 1;
   }
 }
 

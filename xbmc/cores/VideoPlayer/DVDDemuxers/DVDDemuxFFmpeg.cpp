@@ -1294,6 +1294,12 @@ DemuxPacket* CDVDDemuxFFmpeg::ReadInternal(bool keep)
 
     pPacket->iStreamId = stream->uniqueId;
     pPacket->demuxerId = GetDemuxerId();
+    if (stream->type == StreamType::VIDEO)
+    {
+      const auto* video = static_cast<const CDemuxStreamVideo*>(stream);
+      pPacket->isDualStream = video->isDualStream;
+      pPacket->isELPackage = video->isELStream;
+    }
   }
   return pPacket;
 }
@@ -1968,16 +1974,125 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
         // https://github.com/FFmpeg/FFmpeg/blob/release/7.0/doc/APIchanges
         const AVPacketSideData* sideData = nullptr;
 
-        if (st->hdr_type == StreamHdrType::HDR_TYPE_DOLBYVISION)
-        {
+        // Dolby Vision dual-track support. CoreELEC pairs a normal HEVC base
+        // layer with a Dolby Vision enhancement-layer stream and forwards both
+        // streams to the same decoder. Keep that metadata in the generic demux
+        // objects so Android MediaCodec can perform the same pairing.
+        auto dualVideoIt = std::find_if(
+            m_streams.begin(), m_streams.end(),
+            [&st](const std::pair<int, CDemuxStream*>& v)
+            {
+              if (v.second->type != StreamType::VIDEO)
+                return false;
 
+              const auto* video = static_cast<const CDemuxStreamVideo*>(v.second);
+              return video->hdr_type == StreamHdrType::HDR_TYPE_DOLBYVISION ||
+                     st->hdr_type == StreamHdrType::HDR_TYPE_DOLBYVISION;
+            });
+
+        if (dualVideoIt != m_streams.end())
+        {
+          if (st->hdr_type == StreamHdrType::HDR_TYPE_DOLBYVISION)
+          {
+            // Enhancement layer arrived after the base layer.
+            sideData =
+                av_packet_side_data_get(pStream->codecpar->coded_side_data,
+                                        pStream->codecpar->nb_coded_side_data,
+                                        AV_PKT_DATA_DOVI_CONF);
+            if (sideData && sideData->size)
+              st->dovi =
+                  *reinterpret_cast<const AVDOVIDecoderConfigurationRecord*>(sideData->data);
+
+            auto blIt = std::find_if(
+                m_streams.begin(), m_streams.end(),
+                [](const std::pair<int, CDemuxStream*>& v)
+                {
+                  return v.second->type == StreamType::VIDEO &&
+                         static_cast<const CDemuxStreamVideo*>(v.second)->hdr_type !=
+                             StreamHdrType::HDR_TYPE_DOLBYVISION;
+                });
+
+            if (blIt != m_streams.end())
+            {
+              auto* bl = static_cast<CDemuxStreamVideo*>(blIt->second);
+              bl->hdr_type = StreamHdrType::HDR_TYPE_DOLBYVISION;
+
+              if (sideData && sideData->size)
+                bl->dovi = st->dovi;
+              else
+              {
+                // Some dual-track test files omit the dvcC/dvvC side data on the
+                // dependent track. They are Profile 7 by construction.
+                bl->dovi.dv_version_major = 1;
+                bl->dovi.dv_version_minor = 0;
+                bl->dovi.dv_profile = 7;
+                bl->dovi.dv_level = 6;
+                bl->dovi.rpu_present_flag = 1;
+                bl->dovi.el_present_flag = 1;
+                bl->dovi.bl_present_flag = 1;
+                bl->dovi.dv_bl_signal_compatibility_id = 6;
+                st->dovi = bl->dovi;
+              }
+
+              bl->isDualStream = true;
+              st->isDualStream = true;
+              st->isELStream = true;
+
+              CLog::Log(LOGINFO,
+                        "DVDDemuxFFmpeg::AddStream FEL pair: EL stream {} -> BL stream {}",
+                        streamIdx, bl->uniqueId);
+            }
+          }
+          else
+          {
+            // Base layer arrived after the enhancement layer.
+            auto elIt = std::find_if(
+                m_streams.begin(), m_streams.end(),
+                [](const std::pair<int, CDemuxStream*>& v)
+                {
+                  return v.second->type == StreamType::VIDEO &&
+                         static_cast<const CDemuxStreamVideo*>(v.second)->hdr_type ==
+                             StreamHdrType::HDR_TYPE_DOLBYVISION;
+                });
+
+            if (elIt != m_streams.end())
+            {
+              auto* el = static_cast<CDemuxStreamVideo*>(elIt->second);
+              el->isDualStream = true;
+              el->isELStream = true;
+
+              st->hdr_type = StreamHdrType::HDR_TYPE_DOLBYVISION;
+              st->dovi = el->dovi;
+              if (st->dovi.dv_profile == 0)
+              {
+                st->dovi.dv_version_major = 1;
+                st->dovi.dv_version_minor = 0;
+                st->dovi.dv_profile = 7;
+                st->dovi.dv_level = 6;
+                st->dovi.rpu_present_flag = 1;
+                st->dovi.el_present_flag = 1;
+                st->dovi.bl_present_flag = 1;
+                st->dovi.dv_bl_signal_compatibility_id = 6;
+                el->dovi = st->dovi;
+              }
+              st->isDualStream = true;
+
+              CLog::Log(LOGINFO,
+                        "DVDDemuxFFmpeg::AddStream FEL pair: EL stream {} -> BL stream {}",
+                        el->uniqueId, streamIdx);
+            }
+          }
+        }
+
+        if (!st->isDualStream && st->hdr_type == StreamHdrType::HDR_TYPE_DOLBYVISION)
+        {
           sideData =
               av_packet_side_data_get(pStream->codecpar->coded_side_data,
-                                      pStream->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
+                                      pStream->codecpar->nb_coded_side_data,
+                                      AV_PKT_DATA_DOVI_CONF);
           if (sideData && sideData->size)
-          {
-            st->dovi = *reinterpret_cast<const AVDOVIDecoderConfigurationRecord*>(sideData->data);
-          }
+            st->dovi =
+                *reinterpret_cast<const AVDOVIDecoderConfigurationRecord*>(sideData->data);
         }
 
         sideData = av_packet_side_data_get(pStream->codecpar->coded_side_data,

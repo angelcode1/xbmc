@@ -1,0 +1,66 @@
+name: Publish Fire TV FEL Test Release
+
+on:
+  push:
+    branches:
+      - release-firetv-fel-test-20261007
+    paths:
+      - .github/workflows/publish-firetv-fel-test.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: '37616797728'
+      SOURCE_ARTIFACT: kodi-android-firetv-android-firetv-fel-armv7-apk
+      TARGET_SHA: eed0ea0e616cc9565a94bfa116cbb87c34bc9de9
+      TAG: firetv-fel-test-20261007
+      RELEASE_APK: kodi-firetv-armv7-bluray-fel-test-20261007.apk
+    steps:
+      - name: Download validated APK artifact
+        run: |
+          set -euxo pipefail
+          mkdir -p artifact
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "$SOURCE_ARTIFACT" --dir artifact
+          find artifact -type f -maxdepth 4 -print
+
+      - name: Prepare release asset
+        run: |
+          set -euxo pipefail
+          SRC=$(find artifact -type f -name 'kodiapp-armeabi-v7a-debug.apk' -print -quit)
+          test -n "$SRC"
+          cp "$SRC" "$RELEASE_APK"
+          sha256sum "$RELEASE_APK" | tee "$RELEASE_APK.sha256"
+
+      - name: Publish prerelease
+        run: |
+          set -euxo pipefail
+          cat > release-notes.md <<'EOF'
+          Experimental Fire TV Cube Gen3 / gazelle ARMv7 Kodi test build.
+
+          Includes the existing Blu-ray/libbluray work plus the Dolby Vision Profile 7 dual-layer FEL port:
+          - CoreELEC-style BL/EL stream detection and packet routing
+          - BL+EL pairing into one Android MediaCodec access unit
+          - RPU preserved as NAL 62
+          - enhancement layer packaged as Amlogic-compatible NAL 63
+          - Profile 7 compatibility conversion disabled when EL is present
+          - FireOS early surface-callback guard
+
+          Build provenance:
+          - source commit: eed0ea0e616cc9565a94bfa116cbb87c34bc9de9
+          - validated GitHub Actions run: 37616797728
+          - source artifact: 11483170835
+
+          Runtime FEL reconstruction on gazelle is not yet proven; this release is specifically for device testing.
+          EOF
+          gh release create "$TAG" "$RELEASE_APK" "$RELEASE_APK.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$TARGET_SHA" \
+            --title 'Fire TV ARMv7 Blu-ray + Dolby Vision FEL test' \
+            --prerelease \
+            --notes-file release-notes.md

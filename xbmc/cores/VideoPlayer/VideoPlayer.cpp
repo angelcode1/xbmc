@@ -1078,6 +1078,24 @@ void CVideoPlayer::OpenDefaultStreams(bool reset)
   PredicateVideoFilter vf(m_processInfo->GetVideoSettings().m_VideoStream);
   for (const auto& stream : m_SelectionStreams.Get(StreamType::VIDEO, vf))
   {
+    // A Dolby Vision enhancement layer is not a second selectable picture.
+    // Open the base layer and route EL packets to that same video decoder.
+    if (m_pDemuxer && STREAM_SOURCE_MASK(stream.source) == STREAM_SOURCE_DEMUX)
+    {
+      CDemuxStream* demuxStream = m_pDemuxer->GetStream(stream.demuxerId, stream.id);
+      if (demuxStream && demuxStream->type == StreamType::VIDEO)
+      {
+        const auto* video = static_cast<const CDemuxStreamVideo*>(demuxStream);
+        if (video->isDualStream && video->isELStream)
+        {
+          CLog::Log(LOGDEBUG,
+                    "CVideoPlayer::OpenDefaultStreams skipping Dolby Vision EL stream {}",
+                    stream.id);
+          continue;
+        }
+      }
+    }
+
     if (OpenStream(m_CurrentVideo, stream.demuxerId, stream.id, stream.source, reset))
     {
       valid = true;
@@ -1906,6 +1924,13 @@ void CVideoPlayer::ProcessPacket(CDemuxStream* pStream, DemuxPacket* pPacket)
     ProcessRadioRDSData(pStream, pPacket);
   else if (CheckIsCurrent(m_CurrentAudioID3, pStream, pPacket))
     ProcessAudioID3Data(pStream, pPacket);
+  else if (pPacket->isELPackage)
+  {
+    CLog::Log(LOGDEBUG, LOGVIDEO,
+              "CVideoPlayer::ProcessPacket FEL enhancement packet size:{} dts:{:.3f} pts:{:.3f}",
+              pPacket->iSize, pPacket->dts / DVD_TIME_BASE, pPacket->pts / DVD_TIME_BASE);
+    m_VideoPlayerVideo->SendMessage(std::make_shared<CDVDMsgDemuxerPacket>(pPacket, false));
+  }
   else
   {
     CDVDDemuxUtils::FreeDemuxPacket(pPacket); // free it since we won't do anything with it

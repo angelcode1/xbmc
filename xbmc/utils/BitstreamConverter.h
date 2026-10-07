@@ -133,6 +133,11 @@ protected:
                                     const uint8_t* in,
                                     uint32_t in_size,
                                     uint8_t nal_type);
+  static void BitstreamAllocAndCopy(uint8_t** poutbuf,
+                                    uint32_t* poutbuf_size,
+                                    const uint8_t* in,
+                                    uint32_t in_size,
+                                    uint8_t nal_type);
 
 #ifdef HAVE_LIBDOVI
   const DoviData* processDoviRpu(uint8_t* buf, uint32_t nalSize);

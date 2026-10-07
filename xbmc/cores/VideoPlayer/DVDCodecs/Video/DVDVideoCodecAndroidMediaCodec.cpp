@@ -516,6 +516,13 @@ bool CDVDVideoCodecAndroidMediaCodec::Open(CDVDStreamInfo &hints, CDVDCodecOptio
             allowedHdrFormatsSetting, CSettings::VIDEOPLAYER_ALLOWED_HDR_TYPE_HDR10PLUS);
       }
 
+      if (m_hints.dovi.dv_profile == 7 && m_hints.dovi.el_present_flag && convertDovi)
+      {
+        CLog::Log(LOGINFO,
+                  "CDVDVideoCodecAndroidMediaCodec::Open FEL present: disabling P7->P8 compatibility conversion");
+        convertDovi = false;
+      }
+
       bool isDvhe = (m_hints.codec_tag == MKTAG('d', 'v', 'h', 'e'));
       bool isDvh1 = (m_hints.codec_tag == MKTAG('d', 'v', 'h', '1'));
 
@@ -1000,6 +1007,7 @@ void CDVDVideoCodecAndroidMediaCodec::Dispose()
   }
 
   m_bitstream.reset();
+  m_doviLayerPackets.clear();
 
   m_opened = false;
 }
@@ -1053,14 +1061,94 @@ bool CDVDVideoCodecAndroidMediaCodec::AddData(const DemuxPacket &packet)
         UpdateFpsDuration();
       }
 
-      // we have an input buffer, fill it.
+      // We have an input buffer, fill it. Dolby Vision Profile 7 dual-track
+      // content needs the BL and EL sub-access-units in the same MediaCodec
+      // input access unit. Pair them here and use CBitstreamConverter to map
+      // the EL payload to NAL 63 while preserving RPU NAL 62.
       if (pData && m_bitstream)
       {
-        m_bitstream->Convert(pData, iSize);
+        if (packet.isDualStream)
+        {
+          auto other = std::find_if(
+              m_doviLayerPackets.begin(), m_doviLayerPackets.end(),
+              [&packet](const DolbyLayerPacket& pending)
+              {
+                return pending.isEL != packet.isELPackage;
+              });
+
+          if (other == m_doviLayerPackets.end())
+          {
+            DolbyLayerPacket pending;
+            pending.data.assign(pData, pData + iSize);
+            pending.isEL = packet.isELPackage;
+            pending.pts = pts;
+            pending.dts = dts;
+            m_doviLayerPackets.emplace_back(std::move(pending));
+
+            // Keep a small bounded queue if a malformed stream stops pairing.
+            while (m_doviLayerPackets.size() > 8)
+            {
+              CLog::Log(LOGWARNING,
+                        "CDVDVideoCodecAndroidMediaCodec::AddData FEL pairing queue overflow; dropping oldest layer packet");
+              m_doviLayerPackets.pop_front();
+            }
+
+            CLog::Log(LOGDEBUG, LOGVIDEO,
+                      "CDVDVideoCodecAndroidMediaCodec::AddData FELPAIR stored {} packet size:{} pts:{:.3f}",
+                      packet.isELPackage ? "EL" : "BL", packet.iSize,
+                      packet.pts / DVD_TIME_BASE);
+            return true;
+          }
+
+          DolbyLayerPacket pending = std::move(*other);
+          m_doviLayerPackets.erase(other);
+
+          uint8_t* blData = nullptr;
+          int blSize = 0;
+          uint8_t* elData = nullptr;
+          int elSize = 0;
+
+          if (packet.isELPackage)
+          {
+            blData = pending.data.data();
+            blSize = static_cast<int>(pending.data.size());
+            elData = pData;
+            elSize = static_cast<int>(iSize);
+            pts = pending.pts;
+            dts = pending.dts;
+          }
+          else
+          {
+            blData = pData;
+            blSize = static_cast<int>(iSize);
+            elData = pending.data.data();
+            elSize = static_cast<int>(pending.data.size());
+          }
+
+          if (!m_bitstream->Convert(blData, blSize, elData, elSize))
+          {
+            CLog::Log(LOGERROR,
+                      "CDVDVideoCodecAndroidMediaCodec::AddData FELPAIR combine failed BL:{} EL:{}",
+                      blSize, elSize);
+            return false;
+          }
+
+          iSize = static_cast<size_t>(m_bitstream->GetConvertSize());
+          pData = m_bitstream->GetConvertBuffer();
+
+          CLog::Log(LOGINFO, LOGVIDEO,
+                    "CDVDVideoCodecAndroidMediaCodec::AddData FELPAIR combined BL:{} EL:{} -> {} bytes pts:{:.3f}",
+                    blSize, elSize, iSize, pts / DVD_TIME_BASE);
+        }
+        else
+        {
+          m_bitstream->Convert(pData, iSize);
+        }
 
         if (m_state == MEDIACODEC_STATE_FLUSHED && !m_bitstream->CanStartDecode())
         {
-          CLog::Log(LOGDEBUG, "CDVDVideoCodecAndroidMediaCodec::AddData: waiting for keyframe (bitstream)");
+          CLog::Log(LOGDEBUG,
+                    "CDVDVideoCodecAndroidMediaCodec::AddData: waiting for keyframe (bitstream)");
           return true;
         }
 
@@ -1233,6 +1321,7 @@ void CDVDVideoCodecAndroidMediaCodec::Reset()
 
     m_dtsShift = DVD_NOPTS_VALUE;
     m_indexInputBuffer = -1;
+    m_doviLayerPackets.clear();
 
     if (m_bitstream)
       m_bitstream->ResetStartDecode();

@@ -179,6 +179,10 @@ public:
   std::string stereo_mode; // expected stereo mode
   StreamHdrType hdr_type = StreamHdrType::HDR_TYPE_NONE; // type of HDR for this stream (hdr10, etc)
   AVDOVIDecoderConfigurationRecord dovi{};
+  //! @brief True when this video stream is one half of a Dolby Vision BL/EL pair.
+  bool isDualStream{false};
+  //! @brief True for the enhancement-layer half of a dual-stream Dolby Vision pair.
+  bool isELStream{false};
 };
 
 class CDemuxStreamAudio : public CDemuxStream

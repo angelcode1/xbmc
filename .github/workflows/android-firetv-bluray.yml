@@ -14,10 +14,12 @@ on:
   push:
     branches:
       - android-firetv-bluray
+      - android-firetv-fel
     paths:
       - ".github/workflows/android-firetv-bluray.yml"
       - "cmake/platform/android/**"
       - "tools/depends/**"
+      - "xbmc/**"
       - "docs/firetv-android-bluray-notes.md"
 
 permissions:
@@ -175,7 +177,7 @@ jobs:
         if: env.BUILD_MODE == 'full-apk'
         uses: actions/upload-artifact@v4
         with:
-          name: kodi-android-firetv-bluray-armv7-apk
+          name: kodi-android-firetv-${{ github.ref_name }}-armv7-apk
           path: |
             **/*.apk
           if-no-files-found: warn
@@ -184,7 +186,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kodi-android-firetv-bluray-armv7-logs
+          name: kodi-android-firetv-${{ github.ref_name }}-armv7-logs
           path: |
             tools/depends/config.log
             kodi-build/**/*.log

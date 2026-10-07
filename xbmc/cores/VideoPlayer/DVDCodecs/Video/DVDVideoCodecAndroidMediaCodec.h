@@ -164,6 +164,16 @@ protected:
   static std::atomic<bool> m_InstanceGuard;
 
   std::unique_ptr<CBitstreamConverter> m_bitstream;
+
+  struct DolbyLayerPacket
+  {
+    std::vector<uint8_t> data;
+    bool isEL{false};
+    double pts{0.0};
+    double dts{0.0};
+  };
+  std::deque<DolbyLayerPacket> m_doviLayerPackets;
+
   VideoPicture m_videobuffer;
 
   int m_indexInputBuffer;

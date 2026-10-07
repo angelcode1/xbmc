@@ -28,13 +28,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  android-aarch64:
-    name: Android aarch64 libbluray/APK
+  android-armv7:
+    name: Android ARMv7 FireTV libbluray/APK
     runs-on: ubuntu-22.04
     timeout-minutes: 360
 
     env:
-      HOST: aarch64-linux-android
+      HOST: arm-linux-androideabi
       BUILD_MODE: ${{ github.event.inputs.build_mode || 'full-apk' }}
       DEBIAN_FRONTEND: noninteractive
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
@@ -175,7 +175,7 @@ jobs:
         if: env.BUILD_MODE == 'full-apk'
         uses: actions/upload-artifact@v4
         with:
-          name: kodi-android-firetv-bluray-apk
+          name: kodi-android-firetv-bluray-armv7-apk
           path: |
             **/*.apk
           if-no-files-found: warn
@@ -184,7 +184,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kodi-android-firetv-bluray-logs
+          name: kodi-android-firetv-bluray-armv7-logs
           path: |
             tools/depends/config.log
             kodi-build/**/*.log

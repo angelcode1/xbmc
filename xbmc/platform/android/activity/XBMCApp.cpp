@@ -677,18 +677,30 @@ void CXBMCApp::run()
 bool CXBMCApp::XBMC_SetupDisplay()
 {
   android_printf("XBMC_SetupDisplay()");
-  bool result;
-  CServiceBroker::GetAppMessenger()->SendMsg(TMSG_DISPLAY_SETUP, -1, -1,
-                                             static_cast<void*>(&result));
+  const auto messenger = CServiceBroker::GetAppMessenger();
+  if (!messenger)
+  {
+    android_printf("XBMC_SetupDisplay(): AppMessenger unavailable during early surface callback");
+    return false;
+  }
+
+  bool result{false};
+  messenger->SendMsg(TMSG_DISPLAY_SETUP, -1, -1, static_cast<void*>(&result));
   return result;
 }
 
 bool CXBMCApp::XBMC_DestroyDisplay()
 {
   android_printf("XBMC_DestroyDisplay()");
-  bool result;
-  CServiceBroker::GetAppMessenger()->SendMsg(TMSG_DISPLAY_DESTROY, -1, -1,
-                                             static_cast<void*>(&result));
+  const auto messenger = CServiceBroker::GetAppMessenger();
+  if (!messenger)
+  {
+    android_printf("XBMC_DestroyDisplay(): AppMessenger unavailable during early surface callback");
+    return true;
+  }
+
+  bool result{false};
+  messenger->SendMsg(TMSG_DISPLAY_DESTROY, -1, -1, static_cast<void*>(&result));
   return result;
 }
 

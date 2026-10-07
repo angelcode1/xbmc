@@ -27,7 +27,7 @@ permissions:
 
 concurrency:
   group: android-firetv-bluray-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   android-armv7:

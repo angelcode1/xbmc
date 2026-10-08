@@ -66,6 +66,109 @@ extern "C"
 
 using namespace KODI::MESSAGING;
 
+namespace
+{
+struct GazelleP7NalStats
+{
+  unsigned bl{0};
+  unsigned rpu{0};
+  unsigned el{0};
+  unsigned vps{0};
+  unsigned sps{0};
+  unsigned pps{0};
+  unsigned invalid{0};
+};
+
+// Diagnostic only: accepts Annex B and 1-4-byte length-prefixed HEVC packets.
+void GazelleLogP7NalStats(const char* stage,
+                          const uint8_t* data,
+                          size_t bytes,
+                          unsigned nalLengthSize,
+                          bool fel,
+                          bool rpuTested)
+{
+  if (!data || bytes < 5)
+    return;
+
+  GazelleP7NalStats stats;
+  auto record = [&](const uint8_t* nal, size_t nalSize)
+  {
+    if (nalSize < 2)
+    {
+      ++stats.invalid;
+      return;
+    }
+    const unsigned type = (nal[0] >> 1) & 0x3f;
+    if (type <= 31)
+      ++stats.bl;
+    else if (type == 62)
+      ++stats.rpu;
+    else if (type == 63)
+      ++stats.el;
+    else if (type == 32)
+      ++stats.vps;
+    else if (type == 33)
+      ++stats.sps;
+    else if (type == 34)
+      ++stats.pps;
+  };
+  auto prefixSize = [&](size_t i) -> unsigned
+  {
+    if (i + 4 <= bytes && !data[i] && !data[i + 1] && !data[i + 2] && data[i + 3] == 1)
+      return 4;
+    if (i + 3 <= bytes && !data[i] && !data[i + 1] && data[i + 2] == 1)
+      return 3;
+    return 0;
+  };
+
+  const bool annexB = prefixSize(0) != 0;
+  if (annexB)
+  {
+    size_t i = 0;
+    while (i < bytes)
+    {
+      const unsigned prefix = prefixSize(i);
+      if (!prefix)
+      {
+        ++i;
+        continue;
+      }
+      const size_t nalStart = i + prefix;
+      size_t next = nalStart;
+      while (next < bytes && !prefixSize(next))
+        ++next;
+      record(data + nalStart, next - nalStart);
+      i = next;
+    }
+  }
+  else if (nalLengthSize >= 1 && nalLengthSize <= 4)
+  {
+    size_t i = 0;
+    while (i + nalLengthSize <= bytes)
+    {
+      size_t len = 0;
+      for (unsigned k = 0; k < nalLengthSize; ++k)
+        len = (len << 8) | data[i + k];
+      i += nalLengthSize;
+      if (len < 2 || len > bytes - i)
+      {
+        ++stats.invalid;
+        break;
+      }
+      record(data + i, len);
+      i += len;
+    }
+  }
+  else
+    ++stats.invalid;
+
+  CLog::Log(LOGINFO,
+            "GAZELLE_P7_NALS stage={} bytes={} layout={} bl={} rpu={} el={} vps={} sps={} pps={} invalid={} fel={} rpu_tested={}",
+            stage, bytes, annexB ? "annexb" : "length-prefixed", stats.bl, stats.rpu, stats.el,
+            stats.vps, stats.sps, stats.pps, stats.invalid, fel, rpuTested);
+}
+} // namespace
+
 enum MEDIACODEC_STATES
 {
   MEDIACODEC_STATE_UNINITIALIZED,
@@ -1062,6 +1165,13 @@ bool CDVDVideoCodecAndroidMediaCodec::AddData(const DemuxPacket &packet)
         UpdateFpsDuration();
       }
 
+      const bool gazelleTrace = m_hints.dovi.dv_profile == 7 && m_gazelleP7Samples < 48;
+      unsigned gazelleNalLengthSize = 4;
+      if (m_hints.extradata.GetSize() > 21 && m_hints.extradata.GetData()[0] == 1)
+        gazelleNalLengthSize = (m_hints.extradata.GetData()[21] & 3) + 1;
+      if (gazelleTrace)
+        GazelleLogP7NalStats("pre", pData, iSize, gazelleNalLengthSize, false, false);
+
       // We have an input buffer, fill it. Dolby Vision Profile 7 dual-track
       // content needs the BL and EL sub-access-units in the same MediaCodec
       // input access unit. Pair them here and use CBitstreamConverter to map
@@ -1175,6 +1285,14 @@ bool CDVDVideoCodecAndroidMediaCodec::AddData(const DemuxPacket &packet)
         CLog::Log(LOGINFO, "CDVDVideoCodecAndroidMediaCodec::AddData: iSize({}) > size({})", iSize,
                   out_size);
         iSize = out_size;
+      }
+      // Inspect exactly the size that fits MediaCodec's input buffer, including any truncation.
+      if (gazelleTrace)
+      {
+        GazelleLogP7NalStats("post", pData, iSize, 4,
+                             m_bitstream && m_bitstream->GetDoviIsFEL(),
+                             m_bitstream && m_bitstream->GetDoviELTested());
+        ++m_gazelleP7Samples;
       }
       uint8_t* dst_ptr = (uint8_t*)xbmc_jnienv()->GetDirectBufferAddress(buffer.get_raw());
 

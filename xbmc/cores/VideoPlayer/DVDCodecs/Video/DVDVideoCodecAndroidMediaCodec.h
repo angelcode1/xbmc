@@ -173,6 +173,7 @@ protected:
     double dts{0.0};
   };
   std::deque<DolbyLayerPacket> m_doviLayerPackets;
+  unsigned m_gazelleP7Samples{0};
 
   VideoPicture m_videobuffer;
 

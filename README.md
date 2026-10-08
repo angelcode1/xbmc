@@ -81,3 +81,17 @@ Kodi is **[GPLv2 licensed](LICENSE.md)**. You may use, distribute and copy it un
 <a href="https://github.com/xbmc/xbmc"><img src="https://forthebadge.com/images/badges/approved-by-george-costanza.svg" height="25"></a>
 <a href="https://kodi.tv/download"><img src="https://forthebadge.com/images/badges/check-it-out.svg" height="25"></a>
 <a href="https://github.com/xbmc/xbmc"><img src="https://forthebadge.com/images/badges/winter-is-coming.svg" height="25"></a>
+
+## Fire TV Cube 3 (Gazelle) Blu-ray and Dolby Vision FEL development
+
+This fork's experimental Android ARMv7 build targets the Amazon Fire TV Cube 3 (AFTGAZL, `gazelle`) on Fire OS 7. It is **not** an upstream Kodi release and **full Dolby Vision Profile 7 FEL reconstruction is not yet verified on Fire OS**.
+
+**Verified on the device:** Kodi can select `OMX.amlogic.dolby-vision.dvhe.decoder` and use `/dev/amstream_dves_hevc` (stream mode); a Profile 8.1 control sample is recognized by the Dolby driver as `FORMAT_DOVI`. Two Profile 7 FEL samples instead render with `FORMAT_HDR10` in the captured sessions. A direct switch between videos has sometimes triggered MediaCodec `InstanceGuard locked`; stop Kodi between controlled tests.
+
+**CoreELEC source comparison:** CoreELEC 22 detects FEL versus MEL by parsing the first Dolby Vision RPU, then configures FEL/MEL and HEVC stream-mode decoder settings before initialization. Android Fire OS uses a different OMX and 5.4 kernel path, so its DRM settings must not be copied blindly.
+
+**Current diagnostic stage (Stage 1):** the Android branch adds first-RPU FEL/MEL detection and bounded `GAZELLE_DOVI_RPU` and `GAZELLE_P7_NALS` logging for Profile 7 input, before and after conversion. This diagnostic does **not** enable FEL reconstruction or change vendor libraries, seccomp, kernel or global DV settings. FEL/MEL RPU classification requires `HAVE_LIBDOVI` at build time. NAL counts only prove that typed NALs reach the MediaCodec boundary, not that the EL is decoded or composed.
+
+**Build / APK:** [Android FireTV Blu-ray Build](https://github.com/angelcode1/xbmc/actions/workflows/android-firetv-bluray.yml) runs on changes under `xbmc/**` in `android-firetv-bluray`, builds an ARMv7 debug APK with Android dependencies, and uploads APKs as **workflow artifacts**. These are test artifacts, not tagged GitHub Releases or validated shipping binaries. Artifacts are downloadable from the successful run's page.
+
+For experiments, log markers, test samples, limitations, and safe next steps, see [Fire OS / Android Blu-ray engineering notes](docs/firetv-android-bluray-notes.md).

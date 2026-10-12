@@ -50,7 +50,13 @@ struct udf_partitions {
 };
 struct file_entry {
     uint8_t file_type;
-    struct { struct { uint32_t lba; } ad[1]; } data;
+    int content_inline;
+    union {
+        struct {
+            unsigned int num_ad;
+            struct { uint32_t lba; } ad[1];
+        } ads;
+    } u;
 };
 static unsigned reads_primary, reads_mirror;
 static int primary_valid, mirror_valid;
@@ -79,7 +85,9 @@ static struct file_entry *decode_ext_file_entry(const uint8_t *buf,
     struct file_entry *fe = calloc(1, sizeof(*fe));
     if (!fe) return NULL;
     fe->file_type = buf[0];
-    fe->data.ad[0].lba = 10;
+    fe->content_inline = 0;
+    fe->u.ads.num_ad = 1;
+    fe->u.ads.ad[0].lba = 10;
     return fe;
 }
 static void free_file_entry(struct file_entry **fe)

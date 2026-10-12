@@ -1,0 +1,66 @@
+name: Gazelle Kodi APK Optical Addon Preflight
+
+on:
+  push:
+    branches:
+      - android-firetv-fel
+    paths:
+      - .github/workflows/gazelle-kodi-apk-addon-preflight.yml
+      - tools/android/packaging/gazelle/**
+      - .github/workflows/android-firetv-bluray.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle-armv7-optical-addons:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: angelcode1/cube3
+          ref: 057074684f260588c2153580a53a2064b3662a59
+          path: gazelle-cube3-optical
+          persist-credentials: false
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install pinned Android NDK
+        run: |
+          set -euo pipefail
+          sdkmanager --install "ndk;28.2.13676358"
+      - name: Compile physical VFS and stage both Kodi addons
+        run: |
+          set -euo pipefail
+          python3 tools/android/packaging/gazelle/prepare_optical_addons.py \
+            --kodi-root "$GITHUB_WORKSPACE" \
+            --cube3 "$GITHUB_WORKSPACE/gazelle-cube3-optical" \
+            --depends-prefix "$RUNNER_TEMP/gazelle-depends" \
+            --ndk "$ANDROID_HOME/ndk/28.2.13676358"
+      - name: Recreate Kodi Android asset/native-lib layout and validate
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os, zipfile
+          root=Path(os.environ["RUNNER_TEMP"])/"gazelle-depends"
+          out=Path(os.environ["RUNNER_TEMP"])/"gazelle-optical-layout-test.apk"
+          files={}
+          for entry in (root/"share/kodi/addons").rglob("*"):
+              if entry.is_file():
+                  files["assets/addons/"+str(entry.relative_to(root/"share/kodi/addons"))]=entry.read_bytes()
+          lib=root/"lib/kodi/addons/vfs.gazelle.physical/libvfs.gazelle.physical.so"
+          files["lib/armeabi-v7a/libvfs.gazelle.physical.so"]=lib.read_bytes()
+          with zipfile.ZipFile(out, "w") as z:
+              for name,body in sorted(files.items()):
+                  z.writestr(name,body)
+          print("GAZELLE_SYNTHETIC_KODI_ASSET_LAYOUT_PASS",out)
+          PY
+          python3 tools/android/packaging/gazelle/verify_optical_apk.py \
+            "$RUNNER_TEMP/gazelle-optical-layout-test.apk"
+          echo "GAZELLE_OPTICAL_ARMV7_ADDON_STAGING_HOST_PASS no_kodi_apk=1"

@@ -1,6 +1,13 @@
 name: Android FireTV Blu-ray Build
 
 on:
+  workflow_call:
+    inputs:
+      build_mode:
+        description: "Build scope"
+        type: string
+        required: false
+        default: full-apk
   workflow_dispatch:
     inputs:
       build_mode:
@@ -37,7 +44,7 @@ jobs:
 
     env:
       HOST: arm-linux-androideabi
-      BUILD_MODE: ${{ github.event.inputs.build_mode || 'full-apk' }}
+      BUILD_MODE: ${{ inputs.build_mode || github.event.inputs.build_mode || 'full-apk' }}
       DEBIAN_FRONTEND: noninteractive
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
@@ -47,10 +54,13 @@ jobs:
       MAKEFLAGS: -j2
 
     steps:
-      - name: Checkout
+      - name: Checkout public Kodi fork
         uses: actions/checkout@v4
         with:
+          repository: angelcode1/xbmc
+          ref: android-firetv-fel
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -149,7 +159,7 @@ jobs:
           find "$DEPENDS_PREFIX" -maxdepth 6 \( -iname '*bluray*.pc' -o -iname '*udf*.pc' -o -iname '*aacs*.pc' -o -iname '*bdplus*.pc' -o -iname '*bluray*config*.cmake' \) -print | sort || true
 
       - name: Checkout pinned cube3 optical Kodi addon sources
-        if: env.BUILD_MODE == 'full-apk'
+        if: env.BUILD_MODE == 'full-apk' && github.repository == 'angelcode1/cube3'
         uses: actions/checkout@v4
         with:
           repository: angelcode1/cube3
@@ -158,7 +168,7 @@ jobs:
           persist-credentials: false
 
       - name: Compile and embed ARMv7 Gazelle optical Kodi addons
-        if: env.BUILD_MODE == 'full-apk'
+        if: env.BUILD_MODE == 'full-apk' && github.repository == 'angelcode1/cube3'
         run: |
           set -euo pipefail
           python3 tools/android/packaging/gazelle/prepare_optical_addons.py \
@@ -193,7 +203,7 @@ jobs:
           find "$GITHUB_WORKSPACE" -iname '*.apk' -print -exec ls -lh {} \;
 
       - name: Verify Gazelle addons actually exist inside APK
-        if: env.BUILD_MODE == 'full-apk'
+        if: env.BUILD_MODE == 'full-apk' && github.repository == 'angelcode1/cube3'
         run: |
           set -euo pipefail
           mapfile -t apks < <(find "$GITHUB_WORKSPACE" -maxdepth 1 -type f -name 'kodiapp-*.apk')

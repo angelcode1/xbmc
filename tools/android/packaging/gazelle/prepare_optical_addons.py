@@ -78,11 +78,26 @@ def stage(root, cube3, depends, ndk):
     if native.stat().st_size < 4096:
         raise RuntimeError("Gazelle VFS library unexpectedly small")
 
+    # Preserve the previously working Android/Bionic LibMMBD payload across
+    # clean Kodi reinstalls. Build remains private; never copy this binary
+    # into the public xbmc source tree.
+    mmbd_source = cube3 / "blu-ray/libmmbd/android-armv7/libmmbd.so.0"
+    expected_mmbd_sha = "826b5e6dfebfd628c1a6f851a22cb583fa831978600f4ddc2663af46794a8d0b"
+    if not mmbd_source.is_file() or mmbd_source.is_symlink():
+        raise RuntimeError("Private Android LibMMBD payload missing")
+    if hashlib.sha256(mmbd_source.read_bytes()).hexdigest() != expected_mmbd_sha:
+        raise RuntimeError("Private Android LibMMBD SHA256 mismatch")
+    mmbd_target = depends / "lib/kodi/addons/gazelle/libmmbd.so"
+    copy_verified(mmbd_source, mmbd_target)
+    mmbd_header = mmbd_target.read_bytes()[:20]
+    if (mmbd_header[:5] != bytes((0x7f,69,76,70,1)) or
+            int.from_bytes(mmbd_header[18:20],"little") != 40):
+        raise RuntimeError("LibMMBD is not ELF32 ARM")
     copy_verified(vfs_xml, vfs_dir/"addon.xml")
     for name in ("addon.xml", "default.py", "udf_descriptors.py"):
         copy_verified(src / "kodi-check" / name, script_dir / name)
     print("GAZELLE_KODI_APK_ADDONS_STAGED_PASS vfs=0.1.0 checker=0.1.6 "
-          "elf32_arm=1 no_privileged_service_in_apk=1")
+          "elf32_arm=1 mmbd_pinned=1 no_privileged_service_in_apk=1")
     print("GAZELLE_KODI_APK_VFS_SHA256=" + hashlib.sha256(native.read_bytes()).hexdigest())
 
 

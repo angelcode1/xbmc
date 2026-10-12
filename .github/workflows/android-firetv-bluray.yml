@@ -148,6 +148,25 @@ jobs:
           echo "== depends pkgconfig/cmake hints =="
           find "$DEPENDS_PREFIX" -maxdepth 6 \( -iname '*bluray*.pc' -o -iname '*udf*.pc' -o -iname '*aacs*.pc' -o -iname '*bdplus*.pc' -o -iname '*bluray*config*.cmake' \) -print | sort || true
 
+      - name: Checkout pinned cube3 optical Kodi addon sources
+        if: env.BUILD_MODE == 'full-apk'
+        uses: actions/checkout@v4
+        with:
+          repository: angelcode1/cube3
+          ref: 057074684f260588c2153580a53a2064b3662a59
+          path: gazelle-cube3-optical
+          persist-credentials: false
+
+      - name: Compile and embed ARMv7 Gazelle optical Kodi addons
+        if: env.BUILD_MODE == 'full-apk'
+        run: |
+          set -euo pipefail
+          python3 tools/android/packaging/gazelle/prepare_optical_addons.py \\
+            --kodi-root "$GITHUB_WORKSPACE" \\
+            --cube3 "$GITHUB_WORKSPACE/gazelle-cube3-optical" \\
+            --depends-prefix "$DEPENDS_PREFIX" \\
+            --ndk "$ANDROID_SDK_ROOT/ndk/28.2.13676358"
+
       - name: Configure Kodi CMake build
         if: env.BUILD_MODE == 'full-apk'
         run: |
@@ -172,6 +191,14 @@ jobs:
           set -eux
           make -C "$BUILD_DIR" apk
           find "$GITHUB_WORKSPACE" -iname '*.apk' -print -exec ls -lh {} \;
+
+      - name: Verify Gazelle addons actually exist inside APK
+        if: env.BUILD_MODE == 'full-apk'
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find "$GITHUB_WORKSPACE" -maxdepth 1 -type f -name 'kodiapp-*.apk')
+          test "${#apks[@]}" -eq 1
+          python3 tools/android/packaging/gazelle/verify_optical_apk.py "${apks[0]}"
 
       - name: Upload APKs
         if: env.BUILD_MODE == 'full-apk'

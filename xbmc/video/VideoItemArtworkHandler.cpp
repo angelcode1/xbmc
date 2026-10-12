@@ -20,6 +20,7 @@
 #include "resources/ResourcesComponent.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
+#include "utils/ArtTypes.h"
 #include "utils/ArtUtils.h"
 #include "utils/FileExtensionProvider.h"
 #include "utils/FileUtils.h"
@@ -36,6 +37,7 @@
 #include "video/tags/VideoTagExtractionHelper.h"
 
 using namespace XFILE;
+using KODI::MEDIA::NameOf;
 
 namespace KODI::VIDEO
 {
@@ -86,8 +88,9 @@ std::string CVideoItemArtworkHandler::GetCurrentArt() const
   std::string currentArt;
   if (m_item->HasArt(m_artType))
     currentArt = m_item->GetArt(m_artType);
-  else if (m_item->HasArt("thumb") && (m_artType == "poster" || m_artType == "banner"))
-    currentArt = m_item->GetArt("thumb");
+  else if (m_item->HasArt(ART::TYPE::THUMB) &&
+           (m_artType == ART::TYPE::POSTER || m_artType == ART::TYPE::BANNER))
+    currentArt = m_item->GetArt(ART::TYPE::THUMB);
 
   return currentArt;
 }
@@ -148,7 +151,7 @@ void CVideoItemArtworkHandler::PersistArt(const std::string& art)
 
   const bool isAssetArt{VIDEO::IsVideoAssetFile(*m_item)};
   const int mediaId = isAssetArt ? tag->m_iFileId : tag->m_iDbId;
-  const MediaType mediaType = isAssetArt ? MediaTypeVideoVersion : tag->m_type;
+  const std::string& mediaType = isAssetArt ? NameOf(MEDIA::TYPE::VIDEO_VERSION) : tag->m_type;
 
   videodb.SetArtForItem(mediaId, mediaType, m_artType, art);
 
@@ -200,7 +203,7 @@ std::string CVideoItemArtworkArtistHandler::GetCurrentArt() const
   std::string currentArt;
   const int idArtist = musicdb.GetArtistByName(m_item->GetLabel());
   if (idArtist >= 0)
-    currentArt = musicdb.GetArtForItem(idArtist, MediaTypeArtist, "thumb");
+    currentArt = musicdb.GetArtForItem(idArtist, MEDIA::TYPE::ARTIST, ART::TYPE::THUMB);
 
   if (currentArt.empty())
   {
@@ -212,7 +215,7 @@ std::string CVideoItemArtworkArtistHandler::GetCurrentArt() const
     }
 
     currentArt = videodb.GetArtForItem(m_item->GetVideoInfoTag()->m_iDbId,
-                                       m_item->GetVideoInfoTag()->m_type, "thumb");
+                                       m_item->GetVideoInfoTag()->m_type, ART::TYPE::THUMB);
   }
   return currentArt;
 }
@@ -279,7 +282,7 @@ void CVideoItemArtworkArtistHandler::PersistArt(const std::string& art)
 
   const int idArtist = musicdb.GetArtistByName(m_item->GetLabel());
   if (idArtist >= 0)
-    musicdb.SetArtForItem(idArtist, MediaTypeArtist, m_artType, art);
+    musicdb.SetArtForItem(idArtist, MEDIA::TYPE::ARTIST, m_artType, art);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -311,7 +314,7 @@ std::string CVideoItemArtworkActorHandler::GetCurrentArt() const
   }
 
   return videodb.GetArtForItem(m_item->GetVideoInfoTag()->m_iDbId,
-                               m_item->GetVideoInfoTag()->m_type, "thumb");
+                               m_item->GetVideoInfoTag()->m_type, ART::TYPE::THUMB);
 }
 
 std::string CVideoItemArtworkActorHandler::GetLocalArt() const
@@ -471,7 +474,7 @@ public:
 
 std::string CVideoItemArtworkFanartHandler::GetCurrentArt() const
 {
-  return m_item->GetArt("fanart");
+  return m_item->GetArt(ART::TYPE::FANART);
 }
 
 std::vector<std::string> CVideoItemArtworkFanartHandler::GetRemoteArt() const
@@ -554,15 +557,15 @@ std::unique_ptr<IVideoItemArtworkHandler> IVideoItemArtworkHandlerFactory::Creat
 {
   std::unique_ptr<IVideoItemArtworkHandler> artHandler;
 
-  if (artType == "fanart" && mediaType != MediaTypeVideoCollection)
+  if (artType == ART::TYPE::FANART && mediaType != NameOf(MEDIA::TYPE::VIDEO_COLLECTION))
     artHandler = std::make_unique<CVideoItemArtworkFanartHandler>(item, artType);
-  else if (mediaType == MediaTypeArtist)
+  else if (mediaType == NameOf(MEDIA::TYPE::ARTIST))
     artHandler = std::make_unique<CVideoItemArtworkArtistHandler>(item, artType);
   else if (mediaType == "actor")
     artHandler = std::make_unique<CVideoItemArtworkActorHandler>(item, artType);
-  else if (mediaType == MediaTypeSeason)
+  else if (mediaType == NameOf(MEDIA::TYPE::SEASON))
     artHandler = std::make_unique<CVideoItemArtworkSeasonHandler>(item, artType);
-  else if (mediaType == MediaTypeVideoCollection)
+  else if (mediaType == NameOf(MEDIA::TYPE::VIDEO_COLLECTION))
     artHandler = std::make_unique<CVideoItemArtworkMovieSetHandler>(item, artType);
   else
     artHandler = std::make_unique<CVideoItemArtworkHandler>(item, artType);

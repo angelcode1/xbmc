@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "media/MediaType.h"
 #include "utils/Artwork.h"
 
 #include <memory>
@@ -308,6 +309,33 @@ public:
    */
   bool GetArtTypes(const std::string& mediaType, std::vector<std::string>& artTypes);
 
+  //! \brief The art functions above, for an item whose table is a media type.
+  bool SetArtForItem(int mediaId,
+                     KODI::MEDIA::TYPE mediaType,
+                     const std::string& artType,
+                     const std::string& url)
+  {
+    return SetArtForItem(mediaId, KODI::MEDIA::NameOf(mediaType), artType, url);
+  }
+  bool SetArtForItem(int mediaId, KODI::MEDIA::TYPE mediaType, const KODI::ART::Artwork& art)
+  {
+    return SetArtForItem(mediaId, KODI::MEDIA::NameOf(mediaType), art);
+  }
+  bool GetArtForItem(int mediaId, KODI::MEDIA::TYPE mediaType, KODI::ART::Artwork& art)
+  {
+    return GetArtForItem(mediaId, KODI::MEDIA::NameOf(mediaType), art);
+  }
+  std::string GetArtForItem(int mediaId, KODI::MEDIA::TYPE mediaType, const std::string& artType)
+  {
+    return GetArtForItem(mediaId, KODI::MEDIA::NameOf(mediaType), artType);
+  }
+  bool RemoveArtForItem(int mediaId,
+                        KODI::MEDIA::TYPE mediaType,
+                        const std::set<std::string, std::less<>>& artTypes)
+  {
+    return RemoveArtForItem(mediaId, KODI::MEDIA::NameOf(mediaType), artTypes);
+  }
+
 protected:
   friend class CDatabaseManager;
 
@@ -337,6 +365,12 @@ protected:
    function, so don't rely on them.
    */
   virtual void UpdateTables(int version) {}
+
+  /*! \brief Rebuild a table so that its integer primary key never hands out a deleted row's id.
+   For UpdateTables() only: the analytics must be dropped. MySQL already declares every integer
+   primary key auto_increment, so there it does nothing.
+   */
+  void AddAutoIncrement(const std::string& table);
 
   /* \brief The minimum schema version that we support updating from.
    */

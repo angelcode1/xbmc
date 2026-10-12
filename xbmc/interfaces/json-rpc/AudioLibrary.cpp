@@ -26,6 +26,7 @@
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
+#include "utils/ArtTypes.h"
 #include "utils/Artwork.h"
 #include "utils/SortUtils.h"
 #include "utils/StringUtils.h"
@@ -187,8 +188,9 @@ JSONRPC_STATUS CAudioLibrary::GetArtistDetails(const std::string &method, ITrans
 
   CFileItemList items;
   CDatabase::Filter filter;
-  if (!musicdatabase.GetArtistsByWhere(musicUrl.ToString(), items, SortDescription(), filter) ||
-      items.Size() != 1)
+  if (!musicdatabase.GetArtistsByWhere(musicUrl.ToString(), items, SortDescription(), filter))
+    return InternalError;
+  if (items.Size() != 1)
     return NotFound;
 
   // Add "artist" to "properties" array by default
@@ -284,7 +286,7 @@ JSONRPC_STATUS CAudioLibrary::GetAlbums(const std::string &method, ITransportLay
       for (unsigned int index = 0; index < result["albums"].size(); index++)
       {
         CFileItem item;
-        item.GetMusicInfoTag()->SetDatabaseId(result["albums"][index]["albumid"].asInteger32(), MediaTypeAlbum);
+        item.GetMusicInfoTag()->SetDatabaseId(result["albums"][index]["albumid"].asInteger32(), KODI::MEDIA::TYPE::ALBUM);
 
         // Could use FillDetails, but it does unnecessary serialization of empty MusiInfoTag
         // CFileItemPtr itemptr(new CFileItem(item));
@@ -294,8 +296,9 @@ JSONRPC_STATUS CAudioLibrary::GetAlbums(const std::string &method, ITransportLay
 
         if (bFetchFanart)
         {
-          if (item.HasArt("fanart"))
-            result["albums"][index]["fanart"] = IMAGE_FILES::URLFromFile(item.GetArt("fanart"));
+          if (item.HasArt(KODI::ART::TYPE::FANART))
+            result["albums"][index]["fanart"] =
+                IMAGE_FILES::URLFromFile(item.GetArt(KODI::ART::TYPE::FANART));
           else
             result["albums"][index]["fanart"] = "";
         }
@@ -439,7 +442,7 @@ JSONRPC_STATUS CAudioLibrary::GetSongs(const std::string &method, ITransportLaye
         CFileItem item;
         // Only needs song and album id (if we have it) set to get art
         // Getting art is quicker if "albumid" has been fetched
-        item.GetMusicInfoTag()->SetDatabaseId(result["songs"][index]["songid"].asInteger32(), MediaTypeSong);
+        item.GetMusicInfoTag()->SetDatabaseId(result["songs"][index]["songid"].asInteger32(), KODI::MEDIA::TYPE::SONG);
         if (result["songs"][index].isMember("albumid"))
           item.GetMusicInfoTag()->SetAlbumId(result["songs"][index]["albumid"].asInteger32());
         else
@@ -453,15 +456,17 @@ JSONRPC_STATUS CAudioLibrary::GetSongs(const std::string &method, ITransportLaye
 
         if (bFetchThumb)
         {
-          if (item.HasArt("thumb"))
-            result["songs"][index]["thumbnail"] = IMAGE_FILES::URLFromFile(item.GetArt("thumb"));
+          if (item.HasArt(KODI::ART::TYPE::THUMB))
+            result["songs"][index]["thumbnail"] =
+                IMAGE_FILES::URLFromFile(item.GetArt(KODI::ART::TYPE::THUMB));
           else
             result["songs"][index]["thumbnail"] = "";
         }
         if (bFetchFanart)
         {
-          if (item.HasArt("fanart"))
-            result["songs"][index]["fanart"] = IMAGE_FILES::URLFromFile(item.GetArt("fanart"));
+          if (item.HasArt(KODI::ART::TYPE::FANART))
+            result["songs"][index]["fanart"] =
+                IMAGE_FILES::URLFromFile(item.GetArt(KODI::ART::TYPE::FANART));
           else
             result["songs"][index]["fanart"] = "";
         }
@@ -675,16 +680,16 @@ JSONRPC_STATUS JSONRPC::CAudioLibrary::GetSources(const std::string& method, ITr
 
 JSONRPC_STATUS CAudioLibrary::GetAvailableArtTypes(const std::string& method, ITransportLayer* transport, IClient* client, const CVariant& parameterObject, CVariant& result)
 {
-  std::string mediaType;
+  KODI::MEDIA::TYPE mediaType{KODI::MEDIA::TYPE::NONE};
   int mediaID = -1;
   if (parameterObject["item"].isMember("albumid"))
   {
-    mediaType = MediaTypeAlbum;
+    mediaType = KODI::MEDIA::TYPE::ALBUM;
     mediaID = parameterObject["item"]["albumid"].asInteger32();
   }
   if (parameterObject["item"].isMember("artistid"))
   {
-    mediaType = MediaTypeArtist;
+    mediaType = KODI::MEDIA::TYPE::ARTIST;
     mediaID = parameterObject["item"]["artistid"].asInteger32();
   }
   if (mediaID == -1)
@@ -707,16 +712,16 @@ JSONRPC_STATUS CAudioLibrary::GetAvailableArtTypes(const std::string& method, IT
 
 JSONRPC_STATUS CAudioLibrary::GetAvailableArt(const std::string& method, ITransportLayer* transport, IClient* client, const CVariant& parameterObject, CVariant& result)
 {
-  std::string mediaType;
+  KODI::MEDIA::TYPE mediaType{KODI::MEDIA::TYPE::NONE};
   int mediaID = -1;
   if (parameterObject["item"].isMember("albumid"))
   {
-    mediaType = MediaTypeAlbum;
+    mediaType = KODI::MEDIA::TYPE::ALBUM;
     mediaID = parameterObject["item"]["albumid"].asInteger32();
   }
   if (parameterObject["item"].isMember("artistid"))
   {
-    mediaType = MediaTypeArtist;
+    mediaType = KODI::MEDIA::TYPE::ARTIST;
     mediaID = parameterObject["item"]["artistid"].asInteger32();
   }
   if (mediaID == -1)
@@ -795,7 +800,7 @@ JSONRPC_STATUS CAudioLibrary::SetArtistDetails(const std::string &method, ITrans
   if (ParameterNotNull(parameterObject, "art"))
   {
     // Get current artwork
-    musicdatabase.GetArtForItem(artist.idArtist, MediaTypeArtist, artist.art);
+    musicdatabase.GetArtForItem(artist.idArtist, KODI::MEDIA::TYPE::ARTIST, artist.art);
 
     std::set<std::string, std::less<>> removedArtwork;
     CVariant art = parameterObject["art"];
@@ -810,7 +815,7 @@ JSONRPC_STATUS CAudioLibrary::SetArtistDetails(const std::string &method, ITrans
       }
     }
     // Remove null art now, as not done by update
-    if (!musicdatabase.RemoveArtForItem(artist.idArtist, MediaTypeArtist, removedArtwork))
+    if (!musicdatabase.RemoveArtForItem(artist.idArtist, KODI::MEDIA::TYPE::ARTIST, removedArtwork))
       return InternalError;
   }
 
@@ -830,7 +835,7 @@ JSONRPC_STATUS CAudioLibrary::SetArtistDetails(const std::string &method, ITrans
     return InternalError;
 
   if (!artist.art.empty())
-    musicdatabase.SetArtForItem(artist.idArtist, MediaTypeArtist, artist.art);
+    musicdatabase.SetArtForItem(artist.idArtist, KODI::MEDIA::TYPE::ARTIST, artist.art);
 
   CJSONRPCUtils::NotifyItemUpdated();
   return ACK;
@@ -915,7 +920,7 @@ JSONRPC_STATUS CAudioLibrary::SetAlbumDetails(const std::string &method, ITransp
   if (ParameterNotNull(parameterObject, "art"))
   {
     // Get current artwork
-    musicdatabase.GetArtForItem(album.idAlbum, MediaTypeAlbum, album.art);
+    musicdatabase.GetArtForItem(album.idAlbum, KODI::MEDIA::TYPE::ALBUM, album.art);
 
     std::set<std::string, std::less<>> removedArtwork;
     CVariant art = parameterObject["art"];
@@ -930,7 +935,7 @@ JSONRPC_STATUS CAudioLibrary::SetAlbumDetails(const std::string &method, ITransp
       }
     }
     // Remove null art now, as not done by update
-    if (!musicdatabase.RemoveArtForItem(album.idAlbum, MediaTypeAlbum, removedArtwork))
+    if (!musicdatabase.RemoveArtForItem(album.idAlbum, KODI::MEDIA::TYPE::ALBUM, removedArtwork))
       return InternalError;
   }
 
@@ -1021,7 +1026,7 @@ JSONRPC_STATUS CAudioLibrary::SetSongDetails(const std::string &method, ITranspo
   {
     // Get current artwork
     KODI::ART::Artwork artwork;
-    musicdatabase.GetArtForItem(song.idSong, MediaTypeSong, artwork);
+    musicdatabase.GetArtForItem(song.idSong, KODI::MEDIA::TYPE::SONG, artwork);
 
     std::set<std::string, std::less<>> removedArtwork;
     CVariant art = parameterObject["art"];
@@ -1036,8 +1041,8 @@ JSONRPC_STATUS CAudioLibrary::SetSongDetails(const std::string &method, ITranspo
       }
     }
     //Update artwork, not done in update song
-    musicdatabase.SetArtForItem(song.idSong, MediaTypeSong, artwork);
-    if (!musicdatabase.RemoveArtForItem(song.idSong, MediaTypeSong, removedArtwork))
+    musicdatabase.SetArtForItem(song.idSong, KODI::MEDIA::TYPE::SONG, artwork);
+    if (!musicdatabase.RemoveArtForItem(song.idSong, KODI::MEDIA::TYPE::SONG, removedArtwork))
       return InternalError;
   }
 
@@ -1155,16 +1160,21 @@ bool CAudioLibrary::FillFileItemList(const CVariant &parameterObject, CFileItemL
   int albumID = (int)parameterObject["albumid"].asInteger(-1);
   int genreID = (int)parameterObject["genreid"].asInteger(-1);
 
+  // Gather into a list of our own. The sort below applies to what this call resolved, and
+  // callers accumulate several items into one list - sorting theirs would reorder the items
+  // they resolved earlier.
+  CFileItemList resolved;
+
   bool success = false;
   CFileItemPtr fileItem(new CFileItem());
   if (FillFileItem(file, fileItem, parameterObject))
   {
     success = true;
-    list.Add(fileItem);
+    resolved.Add(fileItem);
   }
 
   if (artistID != -1 || albumID != -1 || genreID != -1)
-    success |= musicdatabase.GetSongsNav(KODI::MUSIC::DB_PATH::SONGS, list, SortDescription(),
+    success |= musicdatabase.GetSongsNav(KODI::MUSIC::DB_PATH::SONGS, resolved, SortDescription(),
                                          genreID, artistID, albumID);
 
   int songID = (int)parameterObject["songid"].asInteger(-1);
@@ -1173,7 +1183,7 @@ bool CAudioLibrary::FillFileItemList(const CVariant &parameterObject, CFileItemL
     CSong song;
     if (musicdatabase.GetSong(songID, song))
     {
-      list.Add(std::make_shared<CFileItem>(song));
+      resolved.Add(std::make_shared<CFileItem>(song));
       success = true;
     }
   }
@@ -1183,22 +1193,24 @@ bool CAudioLibrary::FillFileItemList(const CVariant &parameterObject, CFileItemL
     // If we retrieved the list of songs by "artistid"
     // we sort by album (and implicitly by track number)
     if (artistID != -1)
-      list.Sort(SortBy::ALBUM, SortOrder::ASCENDING,
-                CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
-                    CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING)
-                    ? SortAttributeIgnoreArticle
-                    : SortAttributeNone);
+      resolved.Sort(SortBy::ALBUM, SortOrder::ASCENDING,
+                    CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+                        CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING)
+                        ? SortAttributeIgnoreArticle
+                        : SortAttributeNone);
     // If we retrieve the list of songs by "genreid"
     // we sort by artist (and implicitly by album and track number)
     else if (genreID != -1)
-      list.Sort(SortBy::ARTIST, SortOrder::ASCENDING,
-                CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
-                    CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING)
-                    ? SortAttributeIgnoreArticle
-                    : SortAttributeNone);
+      resolved.Sort(SortBy::ARTIST, SortOrder::ASCENDING,
+                    CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+                        CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING)
+                        ? SortAttributeIgnoreArticle
+                        : SortAttributeNone);
     // otherwise we sort by track number
     else
-      list.Sort(SortBy::TRACK_NUMBER, SortOrder::ASCENDING);
+      resolved.Sort(SortBy::TRACK_NUMBER, SortOrder::ASCENDING);
+
+    list.Append(resolved);
   }
 
   return success;
@@ -1231,11 +1243,11 @@ JSONRPC_STATUS CAudioLibrary::GetAdditionalDetails(const CVariant &parameterObje
     return OK;
 
   CMusicDatabase musicdb;
-  if (CMediaTypes::IsMediaType(items.GetContent(), MediaTypeArtist))
+  if (KODI::MEDIA::MediaTypeFromName(items.GetContent()) == KODI::MEDIA::TYPE::ARTIST)
     return GetAdditionalArtistDetails(parameterObject, items, musicdb);
-  else if (CMediaTypes::IsMediaType(items.GetContent(), MediaTypeAlbum))
+  else if (KODI::MEDIA::MediaTypeFromName(items.GetContent()) == KODI::MEDIA::TYPE::ALBUM)
     return GetAdditionalAlbumDetails(parameterObject, items, musicdb);
-  else if (CMediaTypes::IsMediaType(items.GetContent(), MediaTypeSong))
+  else if (KODI::MEDIA::MediaTypeFromName(items.GetContent()) == KODI::MEDIA::TYPE::SONG)
     return GetAdditionalSongDetails(parameterObject, items, musicdb);
 
   return OK;

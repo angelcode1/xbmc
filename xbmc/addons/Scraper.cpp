@@ -32,6 +32,7 @@
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/SettingsValueFlatJsonSerializer.h"
+#include "utils/ArtTypes.h"
 #include "utils/CharsetConverter.h"
 #include "utils/JSONVariantWriter.h"
 #include "utils/ScraperParser.h"
@@ -860,7 +861,8 @@ bool DetailsFromFileItem<CArtist>(const CFileItem& item, CArtist& artist)
     fanart.m_xml = ParseFanart(item, nFanart, "artist.fanart");
     fanart.Unpack();
     for (unsigned int i = 0; i < fanart.GetNumFanarts(); i++)
-      artist.thumbURL.AddParsedUrl(fanart.GetImageURL(i), "fanart", fanart.GetPreviewURL(i));
+      artist.thumbURL.AddParsedUrl(fanart.GetImageURL(i), ART::TYPE::FANART,
+                                   fanart.GetPreviewURL(i));
   }
   return true;
 }
@@ -1445,8 +1447,8 @@ bool CScraper::GetVideoDetailsUncached(XFILE::IHttpClient& fcurl,
 {
   CLog::LogF(LOGDEBUG,
              "Reading {} '{}' using {} scraper (file: '{}', content: '{}', version: '{}')",
-             fMovie ? MediaTypeMovie : MediaTypeEpisode, scurl.GetFirstThumbUrl(), Name(), Path(),
-             Content(), Version().asString());
+             fMovie ? MEDIA::TYPE::MOVIE : MEDIA::TYPE::EPISODE, scurl.GetFirstThumbUrl(), Name(),
+             Path(), Content(), Version().asString());
 
   video.Reset();
 

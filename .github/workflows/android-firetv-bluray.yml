@@ -161,10 +161,10 @@ jobs:
         if: env.BUILD_MODE == 'full-apk'
         run: |
           set -euo pipefail
-          python3 tools/android/packaging/gazelle/prepare_optical_addons.py \\
-            --kodi-root "$GITHUB_WORKSPACE" \\
-            --cube3 "$GITHUB_WORKSPACE/gazelle-cube3-optical" \\
-            --depends-prefix "$DEPENDS_PREFIX" \\
+          python3 tools/android/packaging/gazelle/prepare_optical_addons.py \
+            --kodi-root "$GITHUB_WORKSPACE" \
+            --cube3 "$GITHUB_WORKSPACE/gazelle-cube3-optical" \
+            --depends-prefix "$DEPENDS_PREFIX" \
             --ndk "$ANDROID_SDK_ROOT/ndk/28.2.13676358"
 
       - name: Configure Kodi CMake build

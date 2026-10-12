@@ -27,11 +27,9 @@ def run(apk):
         if len(files) != 1:
             raise RuntimeError("Exactly one native Gazelle VFS library required")
         native = z.read(files[0])
-        if native[:20] != b"\\x7fELF" + bytes([1,1,1]) + bytes(11) + bytes([40,0]):
-            # Check ELF magic, class and e_machine separately, below.
-            if not (native[:5] == b"\\x7fELF\\x01" and
-                    int.from_bytes(native[18:20], "little") == 40):
-                raise RuntimeError("Incorrect Gazelle VFS ELF architecture")
+        if (native[:5] != bytes((0x7f, 69, 76, 70, 1)) or
+                int.from_bytes(native[18:20], "little") != 40):
+            raise RuntimeError("Incorrect Gazelle VFS ELF32 ARM architecture")
         for name, identity, version in (
             ("assets/addons/vfs.gazelle.physical/addon.xml", "vfs.gazelle.physical", "0.1.0"),
             ("assets/addons/script.gazelle.physicaludfcheck/addon.xml",

@@ -23,7 +23,9 @@ if(NOT TARGET ${APP_NAME_LC}::${CMAKE_FIND_PACKAGE_NAME})
 
     set(${${CMAKE_FIND_PACKAGE_NAME}_MODULE}_libType static)
 
-    set(patches "${CMAKE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/001-win-MR10-merged.patch")
+    set(patches
+        "${CMAKE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/001-win-MR10-merged.patch"
+        "${CMAKE_SOURCE_DIR}/tools/depends/target/${${CMAKE_FIND_PACKAGE_NAME}_MODULE_LC}/002-primary-first-metadata.patch")
     generate_patchcommand("${patches}")
     unset(patches)
 

@@ -1,0 +1,64 @@
+name: Gazelle UDF metadata mirror patch gate
+
+on:
+  push:
+    branches:
+      - android-firetv-fel
+    paths:
+      - .github/workflows/gazelle-udf-mirror-preflight.yml
+      - tools/depends/target/udfread/**
+      - cmake/modules/FindUdfread.cmake
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  libudfread-120-primary-first:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Retrieve exactly Kodi-pinned libudfread 1.2.0 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source tools/depends/target/udfread/UDFREAD-VERSION
+          test "$VERSION" = "1.2.0"
+          test "$ARCHIVE" = "libudfread-1.2.0.tar.bz2"
+          for host in \
+            https://mirror.umd.edu/xbmc/build-deps/sources \
+            https://mirror.dc.uz/xbmc/build-deps/sources
+          do
+            if curl --fail --location --silent --show-error --retry 2 \
+              --connect-timeout 10 --max-time 45 "$host/$ARCHIVE" -o "/tmp/$ARCHIVE"; then
+              break
+            fi
+          done
+          test -s "/tmp/$ARCHIVE"
+          echo "$SHA512  /tmp/$ARCHIVE" | sha512sum -c -
+          tar -xjf "/tmp/$ARCHIVE" -C /tmp
+          test -f /tmp/libudfread-1.2.0/src/udfread.c
+          echo "PINNED_LIBUDFREAD_120_ARCHIVE_SHA_PASS"
+      - name: Apply both dependency patches to pinned archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/libudfread-1.2.0
+          patch -p1 --batch --forward -i "$GITHUB_WORKSPACE/tools/depends/target/udfread/001-win-MR10-merged.patch"
+          patch -p1 --batch --forward -i "$GITHUB_WORKSPACE/tools/depends/target/udfread/002-primary-first-metadata.patch"
+          echo "LIBUDFREAD_PRIMARY_FIRST_PATCH_APPLY_PASS"
+      - name: Compile and exercise patched upstream function
+        run: |
+          set -euo pipefail
+          python3 tools/depends/target/udfread/tests/mirror_primary_first_gate.py /tmp/libudfread-1.2.0
+      - name: Compile actual libudfread C archive on host
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq meson ninja-build
+          meson setup /tmp/libudfread-1.2.0/build /tmp/libudfread-1.2.0 -Ddefault_library=static
+          ninja -C /tmp/libudfread-1.2.0/build
+          echo "LIBUDFREAD_120_FULL_HOST_COMPILE_PASS"

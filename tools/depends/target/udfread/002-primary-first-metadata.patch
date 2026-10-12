@@ -1,0 +1,20 @@
+--- a/src/udfread.c
++++ b/src/udfread.c
+@@ -489,8 +489,16 @@ static int _map_metadata_partition(udfread_block_input *input,
+     /* resolve metadata partition location (it is virtual partition inside another partition) */
+     udf_trace("Reading metadata file entry: lba %u, mirror lba %u\n", lba, mirror_lba);
+ 
+     for (i = 0; i < 2; i++) {
++        /*
++         * A successfully resolved primary metadata file is sufficient
++         * to mount. Avoid a speculative mirror read: block inputs which
++         * close on a failed read would otherwise lose the primary too.
++         * Keep the mirror as a fallback if the primary was unavailable.
++         */
++        if (i == 1 && part->p[1].lba) {
++            udf_log("primary metadata mapped, deferring mirror read\n");
++            break;
++        }
+ 
+         if (i == 0) {
+             tag_id = _read_descriptor_block(input, pd->start_block + lba, buf);

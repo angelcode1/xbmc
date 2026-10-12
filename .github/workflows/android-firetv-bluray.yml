@@ -146,9 +146,33 @@ jobs:
             --disable-ccache
 
       - name: Build Android depends
+        shell: bash
         run: |
-          set -eux
-          make -C tools/depends V=1
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/gazelle-ci-logs"
+          logfile="$GITHUB_WORKSPACE/gazelle-ci-logs/android-depends.log"
+          echo "GAZELLE_DEPENDS_START quiet=1 logfile=$logfile"
+          df -h "$GITHUB_WORKSPACE"
+          free -m
+          make -C tools/depends -j2 V=0 >"$logfile" 2>&1 &
+          build_pid=$!
+          while kill -0 "$build_pid" 2>/dev/null; do
+            sleep 75
+            echo "GAZELLE_DEPENDS_HEARTBEAT pid=$build_pid log_bytes=$(wc -c < "$logfile")"
+            df -h "$GITHUB_WORKSPACE" | tail -n 1
+            free -m | grep -E 'Mem:|Swap:' || true
+            tail -n 1 "$logfile" | cut -c 1-200 || true
+          done
+          if wait "$build_pid"; then
+            echo "GAZELLE_DEPENDS_BUILD_PASS"
+            tail -n 35 "$logfile"
+          else
+            status=$?
+            echo "GAZELLE_DEPENDS_BUILD_FAIL exit=$status"
+            grep -E -i '(fatal error|\berror:|\*\*\*|no space left|killed|failed|out of memory)' "$logfile" | tail -n 100 || true
+            tail -n 130 "$logfile"
+            exit "$status"
+          fi
 
       - name: Verify libbluray and udfread depends output
         run: |
@@ -185,9 +209,32 @@ jobs:
 
       - name: Build Kodi
         if: env.BUILD_MODE == 'full-apk'
+        shell: bash
         run: |
-          set -eux
-          make -C "$BUILD_DIR"
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/gazelle-ci-logs"
+          logfile="$GITHUB_WORKSPACE/gazelle-ci-logs/kodi-core.log"
+          echo "GAZELLE_KODI_BUILD_START quiet=1 logfile=$logfile"
+          df -h "$GITHUB_WORKSPACE"
+          make -C "$BUILD_DIR" -j2 >"$logfile" 2>&1 &
+          build_pid=$!
+          while kill -0 "$build_pid" 2>/dev/null; do
+            sleep 75
+            echo "GAZELLE_KODI_HEARTBEAT pid=$build_pid log_bytes=$(wc -c < "$logfile")"
+            df -h "$GITHUB_WORKSPACE" | tail -n 1
+            free -m | grep -E 'Mem:|Swap:' || true
+            tail -n 1 "$logfile" | cut -c 1-200 || true
+          done
+          if wait "$build_pid"; then
+            echo "GAZELLE_KODI_CORE_BUILD_PASS"
+            tail -n 35 "$logfile"
+          else
+            status=$?
+            echo "GAZELLE_KODI_CORE_BUILD_FAIL exit=$status"
+            grep -E -i '(fatal error|\berror:|\*\*\*|no space left|killed|failed|out of memory)' "$logfile" | tail -n 100 || true
+            tail -n 130 "$logfile"
+            exit "$status"
+          fi
 
       - name: Check compiled Blu-ray defines
         if: env.BUILD_MODE == 'full-apk'
@@ -228,4 +275,5 @@ jobs:
             tools/depends/config.log
             kodi-build/**/*.log
             xbmc-depends/**/*.log
+            gazelle-ci-logs/*.log
           if-no-files-found: ignore

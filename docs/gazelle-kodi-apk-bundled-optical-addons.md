@@ -18,3 +18,10 @@ No kernel UDF mount: previous Cube 3 watchdog hard hang. Never package or load `
 ## Build acceptance
 
 [Android FireTV Blu-ray Build](https://github.com/angelcode1/xbmc/actions/workflows/android-firetv-bluray.yml) must pass through both `Compile and embed ARMv7 Gazelle optical Kodi addons` and `Verify Gazelle addons actually exist inside APK`. At that point the APK may be installed after an optional clean uninstall, then root service restarted, Kodi addon activation checked, and v7 diagnostic repeated. Do not mistake APK CI pass for live BD/DVD/CD playback.
+
+
+## Private-source CI and preservation of Android LibMMBD (updated)
+
+The private `angelcode1/cube3` repository is now the authoritative APK build caller: [Gazelle Integrated Kodi Blu-ray APK](https://github.com/angelcode1/cube3/actions/workflows/gazelle-integrated-kodi-apk.yml). The public Kodi fork cannot fetch private cube3 sources on its own; those addon stage steps are conditional on `github.repository == 'angelcode1/cube3'`, and the public preflight validates only source syntax. The caller's private GitHub token is used by actions/checkout for the pinned cube3 commit, not exposed to this public source repository.
+
+The staging script also requires the original private Android/Bionic `libmmbd.so.0` SHA256 `826b5e6dfebfd628c1a6f851a22cb583fa831978600f4ddc2663af46794a8d0b`, staging it as Android `libmmbd.so` through the existing native library packaging path. The APK archive gate verifies its exact digest, allowing a clean Kodi reinstall without losing the library payload. **This is only a library presence/integrity guarantee**; LibMMBD ↔ libbluray ↔ MakeMKV authentication and protected-disc playback still require a separate live test.

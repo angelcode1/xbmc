@@ -25,9 +25,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          source tools/depends/target/udfread/UDFREAD-VERSION
+          pin=tools/depends/target/udfread/UDFREAD-VERSION
+          VERSION="$(sed -n 's/^VERSION=//p' "$pin")"
+          SHA512="$(sed -n 's/^SHA512=//p' "$pin")"
+          ARCHIVE="libudfread-${VERSION}.tar.bz2"
           test "$VERSION" = "1.2.0"
           test "$ARCHIVE" = "libudfread-1.2.0.tar.bz2"
+          test "${#SHA512}" -eq 128
           for host in \
             https://mirror.umd.edu/xbmc/build-deps/sources \
             https://mirror.dc.uz/xbmc/build-deps/sources

@@ -1,6 +1,6 @@
 --- a/src/udfread.c
 +++ b/src/udfread.c
-@@ -489,8 +489,16 @@ static int _map_metadata_partition(udfread_block_input *input,
+@@ -489,7 +489,17 @@ static int _map_metadata_partition(udfread_block_input *input,
      /* resolve metadata partition location (it is virtual partition inside another partition) */
      udf_trace("Reading metadata file entry: lba %u, mirror lba %u\n", lba, mirror_lba);
  

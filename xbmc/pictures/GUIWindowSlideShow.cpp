@@ -37,6 +37,7 @@
 #include "resources/LocalizeStrings.h"
 #include "resources/ResourcesComponent.h"
 #include "settings/DisplaySettings.h"
+#include "settings/MediaSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/ArtTypes.h"
@@ -303,14 +304,6 @@ void CGUIWindowSlideShow::OnDeinitWindow(int nextWindowID)
   CGUIDialog::OnDeinitWindow(nextWindowID);
 }
 
-void CGUIWindowSlideShow::FreeResources(bool forceUnLoad)
-{
-  m_Image[0]->Free();
-  m_Image[1]->Free();
-
-  CGUIDialog::FreeResources(forceUnLoad);
-}
-
 void CGUIWindowSlideShow::Add(const CFileItem *picture)
 {
   CFileItemPtr item(new CFileItem(*picture));
@@ -475,13 +468,13 @@ void CGUIWindowSlideShow::Process(unsigned int currentTime, CDirtyRegionList &re
       {
         CLog::Log(LOGERROR, "Error loading the current image {}: {}", m_iCurrentSlide,
                   m_slides.at(m_iCurrentSlide)->GetPath());
-        if (!IsVideo(*m_slides.at(m_iCurrentPic)))
+        if (!IsVideo(*m_slides.at(m_iCurrentSlide)))
         {
           // try next if we are in slideshow
           CLog::Log(LOGINFO, "set image {} unplayable", m_slides.at(m_iCurrentSlide)->GetPath());
           m_slides.at(m_iCurrentSlide)->SetProperty("unplayable", true);
         }
-        if (m_bLoadNextPic || (bSlideShow && !m_bPause && !IsVideo(*m_slides.at(m_iCurrentPic))))
+        if (m_bLoadNextPic || (bSlideShow && !m_bPause && !IsVideo(*m_slides.at(m_iCurrentSlide))))
         {
           // change to next item, wait loading.
           m_iCurrentSlide = m_iNextSlide;
@@ -562,7 +555,7 @@ void CGUIWindowSlideShow::Process(unsigned int currentTime, CDirtyRegionList &re
     m_iLastFailedNextSlide = -1;
     CFileItemPtr item = m_slides.at(m_iNextSlide);
     std::string picturePath = GetPicturePath(item.get());
-    if (!picturePath.empty() && (!IsVideo(*item) || !m_bSlideShow || m_bPause))
+    if (!picturePath.empty())
     {
       if (IsVideo(*item))
         CLog::Log(LOGDEBUG, "Loading the thumb {} for next video {}: {}", picturePath, m_iNextSlide,
@@ -611,11 +604,7 @@ void CGUIWindowSlideShow::Process(unsigned int currentTime, CDirtyRegionList &re
   // render the next image
   if (m_Image[m_iCurrentPic]->DrawNextImage())
   {
-    if (m_bSlideShow && !m_bPause && IsVideo(*m_slides.at(m_iNextSlide)))
-    {
-      // do not show thumb of video when playing slideshow
-    }
-    else if (m_Image[1 - m_iCurrentPic]->IsLoaded())
+    if (m_Image[1 - m_iCurrentPic]->IsLoaded())
     {
       if (appPlayer->IsPlayingVideo())
         appPlayer->ClosePlayer();
@@ -722,15 +711,19 @@ void CGUIWindowSlideShow::Render()
     return;
 
   CGraphicContext& gfxCtx = CServiceBroker::GetWinSystem()->GetGfxContext();
-  gfxCtx.Clear(0xff000000);
+  // HDR video is drawn underneath the GUI, by the window below the slideshow
+  const bool hdrVideo =
+      IsVideo(*m_slides.at(m_iCurrentSlide)) && CServiceBroker::GetWinSystem()->IsHdrComposite();
+  gfxCtx.Clear(hdrVideo ? 0 : 0xff000000);
 
-  if (IsVideo(*m_slides.at(m_iCurrentSlide)))
+  auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+
+  // Keep the video's thumbnail up until its first frame
+  if (IsVideo(*m_slides.at(m_iCurrentSlide)) && appPlayer->IsRenderingVideo())
   {
     gfxCtx.SetViewWindow(0, 0, m_coordsRes.iWidth, m_coordsRes.iHeight);
     gfxCtx.SetRenderingResolution(gfxCtx.GetVideoResolution(), false);
-
-    auto& components = CServiceBroker::GetAppComponents();
-    const auto appPlayer = components.GetComponent<CApplicationPlayer>();
 
     if (appPlayer->IsRenderingVideoLayer())
     {
@@ -1221,7 +1214,11 @@ bool CGUIWindowSlideShow::PlayVideo()
   CLog::Log(LOGDEBUG, "Playing current video slide {}", item->GetPath());
   m_bPlayingVideo = true;
   m_iVideoSlide = m_iCurrentSlide;
+  // The clip plays inside the slideshow, so it mustn't switch the display mode like a film
+  const bool startWindowed = CMediaSettings::GetInstance().DoesMediaStartWindowed();
+  CMediaSettings::GetInstance().SetMediaStartWindowed(true);
   bool ret = g_application.PlayFile(*item, "");
+  CMediaSettings::GetInstance().SetMediaStartWindowed(startWindowed);
   if (ret == true)
     return true;
   else

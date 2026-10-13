@@ -17,6 +17,7 @@ on:
         default: full-apk
         options:
           - depends-only
+          - routing-core
           - full-apk
   push:
     branches:
@@ -45,7 +46,7 @@ jobs:
 
     env:
       HOST: arm-linux-androideabi
-      BUILD_MODE: ${{ inputs.build_mode || github.event.inputs.build_mode || 'full-apk' }}
+      BUILD_MODE: ${{ (github.event_name == 'push' && github.ref_name == 'fix/gazelle-virtual-bluray-vfs-files-20261013') && 'routing-core' || inputs.build_mode || github.event.inputs.build_mode || 'full-apk' }}
       DEBIAN_FRONTEND: noninteractive
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
@@ -227,13 +228,13 @@ jobs:
             --ndk "$ANDROID_SDK_ROOT/ndk/28.2.13676358"
 
       - name: Configure Kodi CMake build
-        if: env.BUILD_MODE == 'full-apk'
+        if: env.BUILD_MODE != 'depends-only'
         run: |
           set -eux
           make -C tools/depends/target/cmakebuildsys BUILD_DIR="$BUILD_DIR"
 
       - name: Build Kodi
-        if: env.BUILD_MODE == 'full-apk'
+        if: env.BUILD_MODE != 'depends-only'
         shell: bash
         run: |
           set -euo pipefail
@@ -262,13 +263,13 @@ jobs:
           fi
 
       - name: Check compiled Blu-ray defines
-        if: env.BUILD_MODE == 'full-apk'
+        if: env.BUILD_MODE != 'depends-only'
         run: |
           set -eux
           grep -R "HAVE_LIBBLURAY\|HAS_UDFREAD" "$BUILD_DIR" CMakeFiles 2>/dev/null | head -80 || true
 
       - name: Package APK
-        if: env.BUILD_MODE == 'full-apk'
+        if: env.BUILD_MODE != 'depends-only'
         run: |
           set -eux
           make -C "$BUILD_DIR" apk
@@ -282,11 +283,18 @@ jobs:
           test "${#apks[@]}" -eq 1
           python3 tools/android/packaging/gazelle/verify_optical_apk.py "${apks[0]}"
 
+      - name: Mark public routing-core builds as unintegrated
+        if: env.BUILD_MODE == 'routing-core'
+        run: |
+          echo 'ROUTING_CORE_ONLY: Kodi source patch compiled, private VFS/LibMMBD deliberately excluded'
+          echo 'NOT DEPLOYABLE ON CUBE3 WITHOUT PRIVATE INTEGRATION'
+          echo "GAZELLE_ROUTING_CORE_COMMIT=$(git rev-parse HEAD)"
+
       - name: Upload APKs
-        if: env.BUILD_MODE == 'full-apk'
+        if: env.BUILD_MODE != 'depends-only'
         uses: actions/upload-artifact@v4
         with:
-          name: kodi-android-firetv-${{ github.run_id }}-armv7-apk
+          name: kodi-android-firetv-${{ github.run_id }}-${{ env.BUILD_MODE }}-armv7-apk
           path: |
             **/*.apk
           if-no-files-found: warn

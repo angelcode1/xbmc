@@ -219,6 +219,28 @@ bool CDVDInputStreamBluray::Open()
   // root should not have trailing slash
   URIUtils::RemoveSlashAtEnd(root);
 
+  // This disc is presented by Kodi's GZOB-backed virtual image VFS, not as
+  // a POSIX/Android block device accessible to libbluray. The protected-disc
+  // autodetection above selects bd_open_disc(), but that call cannot open a
+  // udf:// URL: it bypasses Kodi's VFS callbacks. Keep the physical-disc
+  // route for every other source (including bus-encrypted media) and try
+  // the existing bd_open_files() callback route only for this exact image.
+  //
+  // This resolves routing, not AACS/BD+ keys or hardware bus encryption.
+  if (openDisc)
+  {
+    const CURL rootUrl(root);
+    if (rootUrl.IsProtocol("udf") && rootUrl.GetFileName().empty() &&
+        StringUtils::EqualsNoCase(rootUrl.GetHostName(), "gazelleoptical://drive0/image"))
+    {
+      CLog::Log(LOGINFO,
+                "CDVDInputStreamBluray::Open - virtual Gazelle optical UDF: selecting "
+                "Kodi VFS files mode (protected-disc bus encryption may require "
+                "additional handling)");
+      openDisc = false;
+    }
+  }
+
   bd_set_debug_handler(CBlurayCallback::bluray_logger);
   bd_set_debug_mask(DBG_CRIT | DBG_BLURAY | DBG_NAV);
 

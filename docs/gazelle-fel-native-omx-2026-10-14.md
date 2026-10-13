@@ -86,3 +86,6 @@ Raw logs, test media, and proprietary Amazon firmware libraries/modules are inte
 - [djnice GPU-composition implementation](https://github.com/djnice/kodi-fel-android)
 - [CoreELEC AMLCodec FEL initialization](https://github.com/CoreELEC/xbmc/blob/aml-5.15.196-22.0/xbmc/cores/VideoPlayer/DVDCodecs/Video/AMLCodec.cpp)
 
+## New static trace (later on 2026-10-14)
+
+The `dv_duallayer:1;` literal is **executably referenced** by `AmlogicVideoDecoder::setUp()` at Thumb `0x21ad4` / `0x21ada`, with a HEVC format `0x0b` and component-field `0x10` gate. It is not merely an unreferenced string. See [exact disassembly findings](gazelle-fel-omx-duallayer-xref-2026-10-14.md) and reproducible offline cross-reference script. Whether the active P7 decoder satisfies the second check or receives a per-decoder `0x179` ioctl remains unknown.

@@ -39,3 +39,13 @@ To inspect the branch without executing it:
 4. Preserve working P8 and require actual enhancement-layer reconstruction proof rather than `FORMAT_DOVI` alone.
 
 The script only identifies direct PC-literal + PC string references. No hit is not evidence of no other reference.
+
+## Stage 2 Kodi-side verification (2026-10-14)
+
+The Kodi branch now emits `GAZELLE_DOVI_CODEC_SELECTED` when a Dolby codec is selected and `GAZELLE_DOVI_MEDIAFORMAT` immediately before calling `MediaCodec.configure()`. These markers record the source Dolby profile, EL-present flag, capability-filter profile, component name, MIME, Surface selection, dimensions and CSD-source length. **The capability-filter profile only controls codec enumeration**; Kodi does not send it as a vendor dual-layer command.
+
+For the first 48 P7 access units, `GAZELLE_P7_INPUT_COPY` computes FNV-1a fingerprints of the processed bytes and the actual copied JNI input buffer after `memcpy()`. `equal=true` rules out a Kodi-side copy corruption for the sampled access unit; it does **not** prove the MediaCodec/OMX service consumes BL/EL/RPU or that native FEL reconstruction occurs. Fingerprints are not cryptographic proofs of equality.
+
+The `component+0x20 == 0x10` check in `AmlogicVideoDecoder::setUp()` is also used by `AmlogicVideoDecoder::intitalizeCodec()` at `0x1ec12` to set the decoder parameter bit `0x40`. The exact semantic name of the vendor component field is **not yet established**; it must not be conflated with `vdec_init format=11`, which is a different field. Thus, the successful HEVC check alone cannot establish that the `dv_duallayer` path runs.
+
+These changes are observational. No global kernel change, vendor ioctl, MediaFormat profile override or new decoder instance has been introduced.

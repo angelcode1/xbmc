@@ -167,6 +167,18 @@ void GazelleLogP7NalStats(const char* stage,
             stage, bytes, annexB ? "annexb" : "length-prefixed", stats.bl, stats.rpu, stats.el,
             stats.vps, stats.sps, stats.pps, stats.invalid, fel, rpuTested);
 }
+// Bounded debug fingerprint of the exact bytes copied to a MediaCodec input buffer.
+// FNV-1a is intentionally only a diagnostic checksum, not a security hash.
+uint32_t GazelleFnv1a32(const uint8_t* data, size_t len)
+{
+  uint32_t hash = 2166136261u;
+  for (size_t i = 0; i < len; ++i)
+  {
+    hash ^= data[i];
+    hash *= 16777619u;
+  }
+  return hash;
+}
 } // namespace
 
 enum MEDIACODEC_STATES
@@ -1027,6 +1039,16 @@ bool CDVDVideoCodecAndroidMediaCodec::Open(CDVDStreamInfo &hints, CDVDCodecOptio
   m_videobuffer.iDisplayWidth  = m_hints.width;
   m_videobuffer.iDisplayHeight = m_hints.height;
 
+  if (m_mime == "video/dolby-vision")
+  {
+    // 'profile' filters codec capabilities; it is not a vendor dual-layer switch.
+    CLog::Log(LOGINFO,
+              "GAZELLE_DOVI_CODEC_SELECTED profile={} el_present={} capability_filter_profile={} "
+              "codec={} mime={} surface={} extradata_bytes={}",
+              m_hints.dovi.dv_profile, m_hints.dovi.el_present_flag, profile, m_codecname,
+              m_mime, m_render_surface, m_hints.extradata.GetSize());
+  }
+
   if (!ConfigureMediaCodec())
     goto FAIL;
 
@@ -1347,6 +1369,16 @@ bool CDVDVideoCodecAndroidMediaCodec::AddData(const DemuxPacket &packet)
         }
       }
 
+
+      if (gazelleTrace && dst_ptr && !cryptoInfo)
+      {
+        const uint32_t sourceHash = GazelleFnv1a32(pData, iSize);
+        const uint32_t copiedHash = GazelleFnv1a32(dst_ptr, iSize);
+        CLog::Log(LOGINFO,
+                  "GAZELLE_P7_INPUT_COPY bytes={} source_fnv1a32={:08x} "
+                  "buffer_fnv1a32={:08x} equal={}",
+                  iSize, sourceHash, copiedHash, sourceHash == copiedHash);
+      }
 
       // Translate from VideoPlayer dts/pts to MediaCodec pts,
       // pts WILL get re-ordered by MediaCodec if needed.
@@ -1788,6 +1820,15 @@ bool CDVDVideoCodecAndroidMediaCodec::ConfigureMediaCodec(void)
   }
   else
       InitSurfaceTexture();
+
+  if (m_mime == "video/dolby-vision")
+  {
+    CLog::Log(LOGINFO,
+              "GAZELLE_DOVI_MEDIAFORMAT profile={} el_present={} codec={} mime={} "
+              "surface={} width={} height={} csd_source_bytes={}",
+              m_hints.dovi.dv_profile, m_hints.dovi.el_present_flag, m_codecname, m_mime,
+              m_render_surface, m_hints.width, m_hints.height, m_hints.extradata.GetSize());
+  }
 
   // configure and start the codec.
   // use the MediaFormat that we have setup.

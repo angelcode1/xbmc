@@ -22,6 +22,7 @@
 #include "utils/XMLUtils.h"
 #include "utils/log.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 
@@ -71,7 +72,50 @@ void CMediaSourceSettings::OnSettingsUnloaded()
 
 bool CMediaSourceSettings::Load()
 {
-  return Load(GetSourcesFile());
+  const std::string file = GetSourcesFile();
+  const bool loaded = Load(file);
+
+#if defined(TARGET_ANDROID)
+  // This Gazelle-specific Android Kodi fork should expose the physical
+  // read-only Blu-ray drive immediately on a fresh installation. The
+  // source is metadata only: no disc I/O, root access, mounting or AACS.
+  // Preserve any existing sources.xml; do not overwrite malformed XML.
+  if (!loaded && CFileUtils::Exists(file))
+    return false;
+
+  constexpr const char* GAZELLE_DISC =
+      "udf://gazelleoptical%3A%2F%2Fdrive0%2Fimage/";
+  const bool exists = std::any_of(
+      m_videoSources.cbegin(), m_videoSources.cend(), [](const CMediaSource& source)
+      {
+        return std::any_of(source.vecPaths.cbegin(), source.vecPaths.cend(),
+                           [](const std::string& path)
+                           {
+                             return StringUtils::EqualsNoCase(
+                                 path, "udf://gazelleoptical%3A%2F%2Fdrive0%2Fimage/");
+                           });
+      });
+
+  if (!exists)
+  {
+    CMediaSource optical;
+    optical.FromNameAndPaths("Physical Blu-ray Drive", {GAZELLE_DISC});
+    optical.m_allowSharing = false;
+    m_videoSources.emplace_back(optical);
+    if (!Save(file))
+    {
+      CLog::Log(LOGERROR,
+                "GAZELLE_OPTICAL_DEFAULT_SOURCE_V1 failed to persist video source");
+      return false;
+    }
+    CLog::Log(LOGINFO,
+              "GAZELLE_OPTICAL_DEFAULT_SOURCE_V1 added path={} read_only=1",
+              GAZELLE_DISC);
+    return true;
+  }
+#endif
+
+  return loaded;
 }
 
 bool CMediaSourceSettings::Load(const std::string& file)

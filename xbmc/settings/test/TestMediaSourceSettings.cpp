@@ -80,7 +80,7 @@ TEST_F(TestMediaSourceSettingsDevicePath, GazelleVirtualOpticalUdfSource)
   // All other UDF inputs retain Kodi's historical mapping.
   CMediaSource legacy;
   legacy.FromNameAndPaths("Other UDF", {"udf://other%3A%2F%2Fimage/"});
-  EXPECT_EQ(legacy.strPath, "D:\\\\");
+  EXPECT_EQ(legacy.strPath, "D:\\");
 }
 
 TEST_F(TestMediaSourceSettingsDevicePath, GazelleSourceSaveReload)

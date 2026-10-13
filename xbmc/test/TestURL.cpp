@@ -43,6 +43,22 @@ TEST_F(TestCURL, TestComparison)
   EXPECT_FALSE("http://www.microsoft.com/index.html?t=9" == url3);
 }
 
+TEST_F(TestCURL, GazelleVirtualOpticalUdfRootDecodesToKodiVfs)
+{
+  // CDVDInputStreamBluray::Open uses the decoded UDF hostname to identify
+  // its exact GZOB-backed virtual source. Non-root files must not match.
+  const CURL root{"udf://gazelleoptical%3a%2f%2fdrive0%2fimage"};
+  EXPECT_TRUE(root.IsProtocol("udf"));
+  EXPECT_EQ(root.GetHostName(), "gazelleoptical://drive0/image");
+  EXPECT_TRUE(root.GetFileName().empty());
+
+  const CURL other{"udf://gazelleoptical%3a%2f%2fdrive1%2fimage"};
+  EXPECT_NE(other.GetHostName(), root.GetHostName());
+
+  const CURL file{"udf://gazelleoptical%3a%2f%2fdrive0%2fimage/BDMV/index.bdmv"};
+  EXPECT_FALSE(file.GetFileName().empty());
+}
+
 struct TestURLGetWithoutUserDetailsData
 {
   std::string input;

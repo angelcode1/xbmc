@@ -16,6 +16,7 @@
 
 #include "BitstreamConverter.h"
 #include "HevcSei.h"
+#include "StringUtils.h"
 
 #include <algorithm>
 
@@ -516,6 +517,8 @@ void CBitstreamConverter::Close()
   m_convert_bytestream = false;
   m_convert_3byteTo4byteNALSize = false;
   m_combine = false;
+  m_doviIsFEL = false;
+  m_doviELTested = false;
 }
 
 bool CBitstreamConverter::Convert(uint8_t* pData, int iSize)
@@ -1509,8 +1512,9 @@ bool CBitstreamConverter::mpeg2_sequence_header(const uint8_t* data,
 // May be NULL if no processing was done or if parsing errored
 const DoviData* CBitstreamConverter::processDoviRpu(uint8_t* buf, uint32_t nalSize)
 {
-  // early exit if no processing option is enabled
-  if (!m_convert_dovi && !m_setDoviZeroLevel5)
+  // From CoreELEC: inspect the first valid RPU even if no rewrite is requested.
+  // Subsequent RPUs pass through unchanged unless conversion is explicitly enabled.
+  if (m_doviELTested && !m_convert_dovi && !m_setDoviZeroLevel5)
     return NULL;
 
   DoviRpuOpaque* rpu = dovi_parse_unspec62_nalu(buf, nalSize);
@@ -1524,6 +1528,17 @@ const DoviData* CBitstreamConverter::processDoviRpu(uint8_t* buf, uint32_t nalSi
   {
     dovi_rpu_free(rpu);
     return rpuData;
+  }
+
+  if (!m_doviELTested)
+  {
+    if (header->el_type &&
+        (header->guessed_profile == 4 || header->guessed_profile == 7))
+      m_doviIsFEL = StringUtils::EqualsNoCase(header->el_type, "FEL");
+    m_doviELTested = true;
+    CLog::Log(LOGINFO, "GAZELLE_DOVI_RPU profile={} el_type={} fel={}",
+              header->guessed_profile,
+              header->el_type ? header->el_type : "unknown", m_doviIsFEL);
   }
 
   if (m_convert_dovi && header->guessed_profile == 7)

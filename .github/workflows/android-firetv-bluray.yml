@@ -58,7 +58,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: angelcode1/xbmc
-          ref: android-firetv-fel
+          # Manual dispatch from a fork test branch must actually build that
+          # selected branch; workflow_call and normal pushes keep base pinned.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || 'android-firetv-fel' }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -183,7 +185,7 @@ jobs:
           find "$DEPENDS_PREFIX" -maxdepth 6 \( -iname '*bluray*.pc' -o -iname '*udf*.pc' -o -iname '*aacs*.pc' -o -iname '*bdplus*.pc' -o -iname '*bluray*config*.cmake' \) -print | sort || true
 
       - name: Checkout pinned cube3 optical Kodi addon sources
-        if: env.BUILD_MODE == 'full-apk' && github.repository == 'angelcode1/cube3'
+        if: env.BUILD_MODE == 'full-apk'
         uses: actions/checkout@v4
         with:
           repository: angelcode1/cube3
@@ -192,7 +194,7 @@ jobs:
           persist-credentials: false
 
       - name: Compile and embed ARMv7 Gazelle optical Kodi addons
-        if: env.BUILD_MODE == 'full-apk' && github.repository == 'angelcode1/cube3'
+        if: env.BUILD_MODE == 'full-apk'
         run: |
           set -euo pipefail
           python3 tools/android/packaging/gazelle/prepare_optical_addons.py \
@@ -250,7 +252,7 @@ jobs:
           find "$GITHUB_WORKSPACE" -iname '*.apk' -print -exec ls -lh {} \;
 
       - name: Verify Gazelle addons actually exist inside APK
-        if: env.BUILD_MODE == 'full-apk' && github.repository == 'angelcode1/cube3'
+        if: env.BUILD_MODE == 'full-apk'
         run: |
           set -euo pipefail
           mapfile -t apks < <(find "$GITHUB_WORKSPACE" -maxdepth 1 -type f -name 'kodiapp-*.apk')

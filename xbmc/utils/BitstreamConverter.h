@@ -111,6 +111,9 @@ public:
   void SetRemoveDovi(bool value) { m_removeDovi = value; }
   void SetRemoveHdr10Plus(bool value) { m_removeHdr10Plus = value; }
   void SetDoviZeroLevel5(bool value) { m_setDoviZeroLevel5 = value; }
+  // First valid Dolby RPU classifies Profile 7/4 as FEL or MEL.
+  bool GetDoviIsFEL() const { return m_doviIsFEL; }
+  bool GetDoviELTested() const { return m_doviELTested; }
 
   static bool mpeg2_sequence_header(const uint8_t* data,
                                     const uint32_t size,
@@ -171,4 +174,6 @@ protected:
   bool m_removeDovi;
   bool m_removeHdr10Plus;
   bool m_setDoviZeroLevel5;
+  bool m_doviIsFEL{false};
+  bool m_doviELTested{false};
 };

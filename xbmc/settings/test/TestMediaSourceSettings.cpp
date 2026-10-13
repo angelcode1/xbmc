@@ -66,6 +66,50 @@ TEST_F(TestMediaSourceSettingsDevicePath, ReloadDriveSource)
 #endif
 }
 
+TEST_F(TestMediaSourceSettingsDevicePath, GazelleVirtualOpticalUdfSource)
+{
+  // A real Gazelle UDF VFS URL is not the legacy D:\\ optical-drive path.
+  constexpr const char* disc = "udf://gazelleoptical%3A%2F%2Fdrive0%2Fimage/";
+  CMediaSource share;
+  share.FromNameAndPaths("Physical Blu-ray Drive", {disc});
+  EXPECT_EQ(share.strPath, disc);
+  ASSERT_EQ(share.vecPaths.size(), 1);
+  EXPECT_EQ(share.vecPaths.front(), disc);
+  EXPECT_EQ(share.m_iDriveType, SourceType::VIRTUAL_OPTICAL_DISC);
+
+  // All other UDF inputs retain Kodi's historical mapping.
+  CMediaSource legacy;
+  legacy.FromNameAndPaths("Other UDF", {"udf://other%3A%2F%2Fimage/"});
+  EXPECT_EQ(legacy.strPath, "D:\\\\");
+}
+
+TEST_F(TestMediaSourceSettingsDevicePath, GazelleSourceSaveReload)
+{
+  constexpr const char* disc = "udf://gazelleoptical%3A%2F%2Fdrive0%2Fimage/";
+  CMediaSource source;
+  source.FromNameAndPaths("Physical Blu-ray Drive", {disc});
+  source.m_allowSharing = false;
+  GetSources("video")->push_back(source);
+
+  XFILE::CFile* file = XBMC_CREATETEMPFILE(".xml");
+  ASSERT_NE(file, nullptr);
+  const std::string xmlFile = XBMC_TEMPFILEPATH(file);
+  file->Close();
+
+  ASSERT_TRUE(Save(xmlFile));
+  Clear();
+  ASSERT_TRUE(Load(xmlFile));
+  ASSERT_TRUE(XBMC_DELETETEMPFILE(file));
+
+  const auto* videoSources = GetSources("video");
+  ASSERT_EQ(videoSources->size(), 1);
+  EXPECT_EQ(videoSources->front().strName, "Physical Blu-ray Drive");
+  EXPECT_EQ(videoSources->front().strPath, disc);
+  ASSERT_EQ(videoSources->front().vecPaths.size(), 1);
+  EXPECT_EQ(videoSources->front().vecPaths.front(), disc);
+  EXPECT_FALSE(videoSources->front().m_allowSharing);
+}
+
 TEST(TestMediaSourceSettings, LoadString)
 {
   CMediaSourceSettings& ms = CMediaSourceSettings::GetInstance();

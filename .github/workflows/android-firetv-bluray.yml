@@ -22,6 +22,7 @@ on:
     branches:
       - android-firetv-bluray
       - android-firetv-fel
+      - fix/gazelle-virtual-bluray-vfs-files-20261013
     paths:
       - ".github/workflows/android-firetv-bluray.yml"
       - "cmake/platform/android/**"
@@ -60,10 +61,31 @@ jobs:
           repository: angelcode1/xbmc
           # Manual dispatch from a fork test branch must actually build that
           # selected branch; workflow_call and normal pushes keep base pinned.
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || 'android-firetv-fel' }}
+          ref: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_name || 'android-firetv-fel' }}
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Verify private cube3 read access before expensive Android build
+        if: env.BUILD_MODE == 'full-apk'
+        shell: bash
+        env:
+          GAZELLE_CUBE3_READ_TOKEN: ${{ secrets.GAZELLE_CUBE3_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GAZELLE_CUBE3_READ_TOKEN" ]; then
+            echo "::error::Missing GAZELLE_CUBE3_READ_TOKEN. Configure a fine-grained read-only token for private angelcode1/cube3 under xbmc Actions secrets."
+            exit 1
+          fi
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --header "Authorization: Bearer $GAZELLE_CUBE3_READ_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/angelcode1/cube3/commits/057074684f260588c2153580a53a2064b3662a59)"
+          if [ "$status" != 200 ]; then
+            echo "::error::Private cube3 source is not readable with GAZELLE_CUBE3_READ_TOKEN (GitHub HTTP $status)."
+            exit 1
+          fi
+          echo "GAZELLE_CUBE3_PRIVATE_SOURCE_ACCESS_PASS expected_pin=057074684f26 permissions=read"
+ 
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -189,6 +211,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: angelcode1/cube3
+          token: ${{ secrets.GAZELLE_CUBE3_READ_TOKEN }}
           ref: 057074684f260588c2153580a53a2064b3662a59
           path: gazelle-cube3-optical
           persist-credentials: false
@@ -263,7 +286,7 @@ jobs:
         if: env.BUILD_MODE == 'full-apk'
         uses: actions/upload-artifact@v4
         with:
-          name: kodi-android-firetv-${{ github.ref_name }}-armv7-apk
+          name: kodi-android-firetv-${{ github.run_id }}-armv7-apk
           path: |
             **/*.apk
           if-no-files-found: warn
@@ -272,7 +295,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kodi-android-firetv-${{ github.ref_name }}-armv7-logs
+          name: kodi-android-firetv-${{ github.run_id }}-armv7-logs
           path: |
             tools/depends/config.log
             kodi-build/**/*.log

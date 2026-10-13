@@ -41,6 +41,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <utility>
@@ -1377,7 +1378,7 @@ bool CDVDVideoCodecAndroidMediaCodec::AddData(const DemuxPacket &packet)
         CLog::Log(LOGINFO,
                   "GAZELLE_P7_INPUT_COPY bytes={} source_fnv1a32={:08x} "
                   "buffer_fnv1a32={:08x} equal={}",
-                  iSize, sourceHash, copiedHash, sourceHash == copiedHash);
+                  iSize, sourceHash, copiedHash, std::memcmp(pData, dst_ptr, iSize) == 0);
       }
 
       // Translate from VideoPlayer dts/pts to MediaCodec pts,

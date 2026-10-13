@@ -4,6 +4,7 @@ DEPS = ../../Makefile.include LIBBLURAY-VERSION Makefile ../../download-files.in
                                   002-darwin-dlopen_searchpath.patch \
                                   003-all-libxml_searchname.patch \
                                   004-win-remove-lib-version.patch \
+                                  005-android-libmmbd-unversioned-dlopen.patch \
                                   tvos.patch
 
 MESON_BUILD_TYPE=release
@@ -50,6 +51,9 @@ ifeq ($(OS),darwin_embedded)
 endif
 	cd $(PLATFORM); patch -p1 -i ../002-darwin-dlopen_searchpath.patch
 	cd $(PLATFORM); patch -p1 -i ../003-all-libxml_searchname.patch
+ifeq ($(OS),android)
+	cd $(PLATFORM); patch -p1 -i ../005-android-libmmbd-unversioned-dlopen.patch
+endif
 ifeq ($(findstring appletv,$(TARGET_PLATFORM)),appletv)
 	cd $(PLATFORM); patch -p1 -i ../tvos.patch
 endif

@@ -1,0 +1,19 @@
+--- a/src/file/dl_posix.c
++++ b/src/file/dl_posix.c
+@@ -56,5 +56,16 @@ void *dl_dlopen(const char *path, const char *version)
+     void *dll;
+     int i;
+ 
++#if defined(__ANDROID__)
++    /* Android APKs install native libraries as lib*.so, not lib*.so.0.
++     * libbluray requests libmmbd version "0"; without this adjustment
++     * its dlopen("libmmbd.so.0") fails before AACS keys are even checked.
++     * Keep versioned lookup on all other platforms and for other libs. */
++    if (version && !strcmp(path, "libmmbd")) {
++        BD_DEBUG(DBG_BLURAY, "GAZELLE_ANDROID_AACS_UNVERSIONED using libmmbd.so\n");
++        version = NULL;
++    }
++#endif
++
+ #if defined(__APPLE__)
+     static const char ext[] = ".dylib";

@@ -8,6 +8,7 @@
 
 #include "MediaSource.h"
 #include "filesystem/File.h"
+#include "filesystem/MultiPathDirectory.h"
 #include "settings/MediaSourceSettings.h"
 #include "test/TestUtils.h"
 #include "utils/XBMCTinyXML2.h"
@@ -83,19 +84,26 @@ TEST_F(TestMediaSourceSettingsDevicePath, GazelleVirtualOpticalUdfSource)
   EXPECT_EQ(legacy.strPath, "D:\\");
 }
 
-TEST_F(TestMediaSourceSettingsDevicePath, GazelleSourceSaveReload)
+TEST_F(TestMediaSourceSettingsDevicePath, GazelleMultipathSourceSaveReload)
 {
-  constexpr const char* disc = "udf://gazelleoptical%3A%2F%2Fdrive0%2Fimage/";
+  constexpr const char* disc = "multipath://udf%3A%2F%2Fgazelleoptical%253A%252F%252Fdrive0%252Fimage%2F/";
+  constexpr const char* udf = "udf://gazelleoptical%3A%2F%2Fdrive0%2Fimage/";
   CMediaSource source;
   source.FromNameAndPaths("Physical Blu-ray Drive", {disc});
   source.m_allowSharing = false;
-  GetSources("video")->push_back(source);
+  EXPECT_EQ(source.strPath, disc);
+  EXPECT_EQ(source.m_iDriveType, SourceType::VPATH);
 
+  std::vector<std::string> decoded;
+  ASSERT_TRUE(XFILE::CMultiPathDirectory::GetPaths(source.strPath, decoded));
+  ASSERT_EQ(decoded.size(), 1);
+  EXPECT_EQ(decoded.front(), udf);
+
+  GetSources("video")->push_back(source);
   XFILE::CFile* file = XBMC_CREATETEMPFILE(".xml");
   ASSERT_NE(file, nullptr);
   const std::string xmlFile = XBMC_TEMPFILEPATH(file);
   file->Close();
-
   ASSERT_TRUE(Save(xmlFile));
   Clear();
   ASSERT_TRUE(Load(xmlFile));

@@ -76,43 +76,59 @@ bool CMediaSourceSettings::Load()
   const bool loaded = Load(file);
 
 #if defined(TARGET_ANDROID)
-  // This Gazelle-specific Android Kodi fork should expose the physical
-  // read-only Blu-ray drive immediately on a fresh installation. The
-  // source is metadata only: no disc I/O, root access, mounting or AACS.
-  // Preserve any existing sources.xml; do not overwrite malformed XML.
+  // Kodi's legacy media source parser maps bare udf:// URLs to D:\\.
+  // Wrap the real optical image with a one-element multipath:// directory;
+  // CMultiPathDirectory decodes it back to the exact UDF VFS path.
+  // Only this Android/Gazelle source is registered. No root or disc I/O.
   if (!loaded && CFileUtils::Exists(file))
-    return false;
+    return false; // Preserve malformed or unparseable existing sources.xml.
 
   constexpr const char* GAZELLE_DISC =
+      "multipath://udf%3A%2F%2Fgazelleoptical%253A%252F%252Fdrive0%252Fimage%2F/";
+  constexpr const char* OLD_GAZELLE_UDF =
       "udf://gazelleoptical%3A%2F%2Fdrive0%2Fimage/";
-  const bool exists = std::any_of(
-      m_videoSources.cbegin(), m_videoSources.cend(), [](const CMediaSource& source)
-      {
-        return std::any_of(source.vecPaths.cbegin(), source.vecPaths.cend(),
-                           [](const std::string& path)
-                           {
-                             return StringUtils::EqualsNoCase(
-                                 path, "udf://gazelleoptical%3A%2F%2Fdrive0%2Fimage/");
-                           });
-      });
-
-  if (!exists)
+  bool found = false;
+  bool changed = false;
+  for (auto& source : m_videoSources)
+  {
+    const bool hasWrapper = std::any_of(
+        source.vecPaths.cbegin(), source.vecPaths.cend(),
+        [&](const std::string& path)
+        { return StringUtils::EqualsNoCase(path, GAZELLE_DISC); });
+    const bool hasBareUdf = std::any_of(
+        source.vecPaths.cbegin(), source.vecPaths.cend(),
+        [&](const std::string& path)
+        { return StringUtils::EqualsNoCase(path, OLD_GAZELLE_UDF); });
+    if (!hasWrapper && !hasBareUdf)
+      continue;
+    found = true;
+    // Migrate only the exact default source we previously created.
+    if (!hasWrapper && source.strName == "Physical Blu-ray Drive")
+    {
+      source.FromNameAndPaths("Physical Blu-ray Drive", {GAZELLE_DISC});
+      source.m_allowSharing = false;
+      changed = true;
+    }
+  }
+  if (!found)
   {
     CMediaSource optical;
     optical.FromNameAndPaths("Physical Blu-ray Drive", {GAZELLE_DISC});
     optical.m_allowSharing = false;
     m_videoSources.emplace_back(optical);
+    changed = true;
+  }
+  if (changed)
+  {
     if (!Save(file))
     {
-      CLog::Log(LOGERROR,
-                "GAZELLE_OPTICAL_DEFAULT_SOURCE_V1 failed to persist video source");
+      CLog::Log(LOGERROR, "GAZELLE_OPTICAL_DEFAULT_SOURCE_V2 persist failed");
       return false;
     }
-    CLog::Log(LOGINFO,
-              "GAZELLE_OPTICAL_DEFAULT_SOURCE_V1 added path={} read_only=1",
+    CLog::Log(LOGINFO, "GAZELLE_OPTICAL_DEFAULT_SOURCE_V2 path={} multipath=1",
               GAZELLE_DISC);
-    return true;
   }
+  return loaded || changed;
 #endif
 
   return loaded;

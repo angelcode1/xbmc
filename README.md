@@ -95,3 +95,5 @@ This fork's experimental Android ARMv7 build targets the Amazon Fire TV Cube 3 (
 **Build / APK:** [Android FireTV Blu-ray Build](https://github.com/angelcode1/xbmc/actions/workflows/android-firetv-bluray.yml) runs on changes under `xbmc/**` in `android-firetv-bluray`, builds an ARMv7 debug APK with Android dependencies, and uploads APKs as **workflow artifacts**. These are test artifacts, not tagged GitHub Releases or validated shipping binaries. Artifacts are downloadable from the successful run's page.
 
 For experiments, log markers, test samples, limitations, and safe next steps, see [Fire OS / Android Blu-ray engineering notes](docs/firetv-android-bluray-notes.md).
+
+**Current P8/P7 ELF and runtime audit (2026-10-14):** [Gazelle Dolby Vision FEL investigation](docs/gazelle-fel-native-omx-2026-10-14.md). Includes controlled six-snapshot results, per-decoder `0x179` kernel/OMX ABI, failed and restored global-parameter tests, djnice GPU feasibility, and read-only reproduction tools. Full P7 FEL reconstruction remains **unverified** on Fire OS.

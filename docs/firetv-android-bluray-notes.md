@@ -1,5 +1,7 @@
 # Fire OS 7 / Android Blu-ray and Dolby Vision FEL — Gazelle engineering status
 
+> **2026-10-14 update:** The six-checkpoint live P8/P7 comparison, ABI analysis and subsequent experiments are documented in [the current Gazelle FEL investigation](gazelle-fel-native-omx-2026-10-14.md). Earlier stream-mode device examples and next-steps below refer to the historical Stage 1 configuration; the current working control uses frame mode (`/dev/amstream_dves_hevc_frame`, `vendor.media.omx.use_dv_frame=true`).
+
 > **Experimental status (2026-10-08):** The Kodi ARMv7 Fire TV branch supports the ongoing Blu-ray and Dolby Vision experiments. Dolby Vision Profile 7 **full enhancement layer (FEL) reconstruction is not yet proven working on Fire OS 7**. This document separates observations from hypotheses.
 
 ## Platform and existing milestones

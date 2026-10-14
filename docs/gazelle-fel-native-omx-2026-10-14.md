@@ -93,3 +93,7 @@ The `dv_duallayer:1;` literal is **executably referenced** by `AmlogicVideoDecod
 ## Bridge-library audit (2026-10-14, 13:15 AEST)
 
 The verified five-library bridge capture confirms the plugin loader (`libstagefrighthw.so`) → OMX core (`libOmxCore.so`) → video decoder (`libOmxVideo.so`) chain and maps the active `OMX.amlogic.dolby-vision.dvhe.decoder` to the registered `video_decoder.dolby-vision` role. It does **not** establish the effective peer `+0x20` value, the `dv_duallayer` config string, or a per-decoder ioctl. [Full source-matched disassembly and next gate](gazelle-fel-omx-bridge-audit-2026-10-14.md). No code or device configuration was changed.
+
+## Peer field reclassification (2026-10-14, offline disassembly)
+
+A later cross-class instruction trace demonstrates that the alternate decoder maps peer field `+0x20 == 0x10` to HEVC format `0x0b` and stores that selection in its codec-format field. The legacy decoder's `dv_duallayer:1;` append is gated by that same peer value and HEVC format. This is **not a demonstrated FEL toggle**. Review the [peer gate and instruction evidence](gazelle-fel-peer-0x10-format-gate-2026-10-14.md) and [read-only binary verification tool](../tools/gazelle-fel/audit-duallayer-gate.py). Effective per-instance configuration, `0x179` invocation and EL decoding remain unknown; do not use this field as grounds to alter kernel or vendor settings.

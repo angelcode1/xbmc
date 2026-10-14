@@ -21,6 +21,8 @@ Archive: `gazelle-stagefright-20261014-145648.zip`, SHA256 `9b4fa154e6033e049109
 5. **Zero direct little-endian 32-bit matches** of vendor index `0x7f00010d` occur in all three ELF binaries. This is a narrow, useful **negative literal scan**, NOT proof the index is never sent: code may construct it via instructions, receive it from another library, or forward it generically.
 6. The earlier active `media.codec` memory-map archive contains three mappings of `libstagefrighthw.so` and none of `libstagefrightdolby.so`. **Do not infer the latter is absent from disk or was never loaded**. P8 Dolby Vision worked in the recorded environment, so this mapping alone cannot explain P7 FEL failure.
 
+7. `libstagefright.so` also exports `ACodec::setDolbyParameter()`, but the associated strings include `omx.index.dolby.dax_state`, `omx.index.dolby.profile_index` and `setDolbyParameterOnProcessedAudio`. These are **Dolby audio / DAX-related signals**, not evidence of a native Dolby Vision enhancement-layer switch. Do not treat every Dolby-named Stagefright function as a DV FEL control.
+
 ## Implication for the preceding vendor trace
 
 Previous `libomx_framework_alt.so` analysis identified the vendor OMX setter index **0x7f00010d**, copying parameter offsets `+0x0c` and `+0x10` into owning component fields `+0x20` / `+0x24`. The Dolby class in `libOmxVideo.so` consults owner `+0x20` against `0x400`, or `owner+0x3dc` against `0x7f100001`. These system libraries **forward OMX parameters but do not identify the source/value of that particular vendor setter**.

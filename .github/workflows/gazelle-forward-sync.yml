@@ -60,12 +60,18 @@ jobs:
             -f "ref=refs/heads/$branch" \
             -f "sha=$master_sha" --silent
 
-          gh pr create \
+          if gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base android-firetv-unified \
             --head "$branch" \
             --title "Review upstream Kodi sync into Blu-ray/AACS and Dolby FEL branch" \
-            --body "Safe staging snapshot of fork master \`$master_sha\` into unified \`$unified_sha\`. This PR does not change either live branch and does not remove their commits. Resolve merge conflicts **on the sync staging branch** without overwriting Blu-ray/AACS, UDF or Dolby Vision FEL changes. Require Gazelle source-preservation CI and a full ARMv7 core build. Merge using **Create a merge commit**, never squash, force push or reset."
+            --body "Safe staging snapshot of fork master \`$master_sha\` into unified \`$unified_sha\`. This PR does not change either live branch and does not remove their commits. Resolve merge conflicts **on the sync staging branch** without overwriting Blu-ray/AACS, UDF or Dolby Vision FEL changes. Require Gazelle source-preservation CI and a full ARMv7 core build. Merge using **Create a merge commit**, never squash, force push or reset."; then
+            echo "GAZELLE_FORWARD_SYNC_PR_CREATED=1" >> "$GITHUB_STEP_SUMMARY"
+          else
+            link="https://github.com/$GITHUB_REPOSITORY/compare/android-firetv-unified...$branch?expand=1"
+            echo "::warning::GitHub Actions is not allowed to create PRs. Staging branch is preserved. Open the comparison URL manually."
+            echo "GAZELLE_FORWARD_SYNC_PR_MANUAL_URL=$link" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
           {
             echo "## Kodi upstream forward-sync staged"

@@ -22,6 +22,7 @@
 #include "utils/XMLUtils.h"
 #include "utils/log.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 
@@ -71,7 +72,66 @@ void CMediaSourceSettings::OnSettingsUnloaded()
 
 bool CMediaSourceSettings::Load()
 {
-  return Load(GetSourcesFile());
+  const std::string file = GetSourcesFile();
+  const bool loaded = Load(file);
+
+#if defined(TARGET_ANDROID)
+  // Kodi's legacy media source parser maps bare udf:// URLs to D:\\.
+  // Wrap the real optical image with a one-element multipath:// directory;
+  // CMultiPathDirectory decodes it back to the exact UDF VFS path.
+  // Only this Android/Gazelle source is registered. No root or disc I/O.
+  if (!loaded && CFileUtils::Exists(file))
+    return false; // Preserve malformed or unparseable existing sources.xml.
+
+  constexpr const char* GAZELLE_DISC =
+      "multipath://udf%3A%2F%2Fgazelleoptical%253A%252F%252Fdrive0%252Fimage%2F/";
+  constexpr const char* OLD_GAZELLE_UDF =
+      "udf://gazelleoptical%3A%2F%2Fdrive0%2Fimage/";
+  bool found = false;
+  bool changed = false;
+  for (auto& source : m_videoSources)
+  {
+    const bool hasWrapper = std::any_of(
+        source.vecPaths.cbegin(), source.vecPaths.cend(),
+        [&](const std::string& path)
+        { return StringUtils::EqualsNoCase(path, GAZELLE_DISC); });
+    const bool hasBareUdf = std::any_of(
+        source.vecPaths.cbegin(), source.vecPaths.cend(),
+        [&](const std::string& path)
+        { return StringUtils::EqualsNoCase(path, OLD_GAZELLE_UDF); });
+    if (!hasWrapper && !hasBareUdf)
+      continue;
+    found = true;
+    // Migrate only the exact default source we previously created.
+    if (!hasWrapper && source.strName == "Physical Blu-ray Drive")
+    {
+      source.FromNameAndPaths("Physical Blu-ray Drive", {GAZELLE_DISC});
+      source.m_allowSharing = false;
+      changed = true;
+    }
+  }
+  if (!found)
+  {
+    CMediaSource optical;
+    optical.FromNameAndPaths("Physical Blu-ray Drive", {GAZELLE_DISC});
+    optical.m_allowSharing = false;
+    m_videoSources.emplace_back(optical);
+    changed = true;
+  }
+  if (changed)
+  {
+    if (!Save(file))
+    {
+      CLog::Log(LOGERROR, "GAZELLE_OPTICAL_DEFAULT_SOURCE_V2 persist failed");
+      return false;
+    }
+    CLog::Log(LOGINFO, "GAZELLE_OPTICAL_DEFAULT_SOURCE_V2 path={} multipath=1",
+              GAZELLE_DISC);
+  }
+  return loaded || changed;
+#endif
+
+  return loaded;
 }
 
 bool CMediaSourceSettings::Load(const std::string& file)

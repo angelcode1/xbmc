@@ -55,7 +55,14 @@ void CMediaSource::FromNameAndPaths(std::string_view name, const std::vector<std
   else if (StringUtils::StartsWithNoCase(strPath, "udf:"))
   {
     m_iDriveType = SourceType::VIRTUAL_OPTICAL_DISC;
-    strPath = "D:\\";
+    // The Gazelle root is an actual Kodi VFS-backed UDF image, not a
+    // platform DVD drive letter. The historical rewrite to D:\\ would
+    // make a named video source silently point away from the optical VFS.
+    // Preserve only our fixed, read-only optical image; keep legacy UDF
+    // behavior unchanged for all other paths.
+    if (!StringUtils::EqualsNoCase(
+            strPath, "udf://gazelleoptical%3A%2F%2Fdrive0%2Fimage/"))
+      strPath = "D:\\";
   }
   else if (URIUtils::IsISO9660(strPath))
     m_iDriveType = SourceType::VIRTUAL_OPTICAL_DISC;

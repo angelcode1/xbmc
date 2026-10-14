@@ -88,9 +88,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr create \
+          if gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base master \
             --head "$SYNC_BRANCH" \
             --title "Sync Kodi upstream master into fork (preserve Git history)" \
-            --body "Merge Kodi upstream \`$NEW_UPSTREAM\` into fork master \`$OLD_MASTER\` with a normal two-parent merge. This workflow never force-pushes, resets, squashes, or overwrites development branches. Review upstream changes before merging. After merging into master, use the Gazelle forward-sync proposal to merge master into android-firetv-unified, retaining the Blu-ray/AACS and DV FEL history."
+            --body "Merge Kodi upstream \`$NEW_UPSTREAM\` into fork master \`$OLD_MASTER\` with a normal two-parent merge. This workflow never force-pushes, resets, squashes, or overwrites development branches. Review upstream changes before merging. After merging into master, use the Gazelle forward-sync proposal to merge master into android-firetv-unified, retaining the Blu-ray/AACS and DV FEL history."; then
+            echo "GAZELLE_UPSTREAM_SYNC_PR_CREATED=1" >> "$GITHUB_STEP_SUMMARY"
+          else
+            link="https://github.com/$GITHUB_REPOSITORY/compare/master...$SYNC_BRANCH?expand=1"
+            echo "::warning::GitHub Actions cannot create PRs in this repository. The staging branch is preserved. Open the manual comparison URL."
+            echo "GAZELLE_UPSTREAM_SYNC_PR_MANUAL_URL=$link" >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -1,0 +1,61 @@
+name: Gazelle - preserve AACS and Dolby FEL integration
+
+on:
+  pull_request:
+    branches:
+      - android-firetv-unified
+  push:
+    branches:
+      - android-firetv-unified
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preserve-gazelle:
+    name: Require both Blu-ray and FEL source gates
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out proposed or current unified Kodi source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify source and build contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "GAZELLE_INTEGRATION_GUARD_START"
+
+          # AACS / physical optical / MakeMKV bridge path.
+          test -f tools/depends/target/libbluray/gazelle-aacs-gate-v1.py
+          test -f tools/depends/target/libbluray/005-android-libmmbd-unversioned-dlopen.patch
+          grep -Fq 'gazelle-aacs-gate-v1.py' tools/depends/target/libbluray/Makefile
+          grep -Fq 'GAZELLE_AACS_GATE_V1' tools/depends/target/libbluray/gazelle-aacs-gate-v1.py
+          test -f xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
+          test -f xbmc/settings/MediaSourceSettings.cpp
+          test -f tools/depends/target/udfread/002-primary-first-metadata.patch
+          test -f tools/android/packaging/gazelle/prepare_optical_addons.py
+          test -f tools/android/packaging/gazelle/verify_optical_apk.py
+          echo "GAZELLE_AACS_SOURCE_PRESERVED_PASS"
+
+          # Dolby Vision P7 and native OMX analysis/configuration.
+          video=xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp
+          test -f "$video"
+          grep -Fq 'GAZELLE_DOVI_CAPABILITIES' "$video"
+          grep -Fq 'GAZELLE_DOVI_MEDIAFORMAT' "$video"
+          grep -Fq 'm_hints.dovi.el_present_flag' "$video"
+          test -f tools/gazelle-fel/audit-stagefright-profile-read.py
+          test -f docs/gazelle-fel-stagefright-profile-handoff-2026-10-14.md
+          echo "GAZELLE_FEL_SOURCE_PRESERVED_PASS"
+
+          # The unified workflow may only create a public routing core.
+          # The one installable APK needs the private cube3 optical stage.
+          workflow=.github/workflows/android-firetv-bluray.yml
+          test -f "$workflow"
+          grep -Fq 'android-firetv-unified' "$workflow"
+          grep -Fq 'GAZELLE_PUBLIC_ROUTING_CORE_ONLY' "$workflow"
+          echo "GAZELLE_COMBINED_BUILD_CONTRACT_PRESERVED_PASS"
+          echo "GAZELLE_SYNC_PRESERVATION_GATE_PASS aacs=1 fel=1 build=1"

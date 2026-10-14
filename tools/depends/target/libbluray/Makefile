@@ -5,6 +5,7 @@ DEPS = ../../Makefile.include LIBBLURAY-VERSION Makefile ../../download-files.in
                                   003-all-libxml_searchname.patch \
                                   004-win-remove-lib-version.patch \
                                   005-android-libmmbd-unversioned-dlopen.patch \
+                                  gazelle-aacs-gate-v1.py \
                                   tvos.patch
 
 MESON_BUILD_TYPE=release
@@ -53,6 +54,14 @@ endif
 	cd $(PLATFORM); patch -p1 -i ../003-all-libxml_searchname.patch
 ifeq ($(OS),android)
 	cd $(PLATFORM); patch -p1 -i ../005-android-libmmbd-unversioned-dlopen.patch
+	# This branch is DIAGNOSTIC ONLY. No installed Kodi production core is changed.
+	# Stop if the unpacked, pre-instrumented libbluray 1.5.0 source differs.
+	cd $(PLATFORM); python3 ../gazelle-aacs-gate-v1.py --source src/libbluray/disc/aacs.c --expected-sha256 74936b808fd5d236af3b6f3f73ef4e711fbf1ea23e3f9dac57051134ded5a3ce --out src/libbluray/disc/aacs.gazelle-stage-v1.c
+	cd $(PLATFORM); printf '%s  %s\n' 76c64d58fa109108eda0958cd314df185f2542327f883995ba3a55b653b6357d src/libbluray/disc/aacs.gazelle-stage-v1.c | sha256sum --check -
+	cd $(PLATFORM); { printf '%s\n' '#if defined(__ANDROID__)' '#define GAZELLE_AACS_GATE_TRACE 1' '#endif'; cat src/libbluray/disc/aacs.gazelle-stage-v1.c; } > src/libbluray/disc/aacs.gazelle-final-v1.c
+	cd $(PLATFORM); mv src/libbluray/disc/aacs.gazelle-final-v1.c src/libbluray/disc/aacs.c
+	cd $(PLATFORM); rm src/libbluray/disc/aacs.gazelle-stage-v1.c
+	@echo GAZELLE_AACS_GATE_V1_DIAGNOSTIC_SOURCE_STAGED_PRODUCTION_UNCHANGED
 endif
 ifeq ($(findstring appletv,$(TARGET_PLATFORM)),appletv)
 	cd $(PLATFORM); patch -p1 -i ../tvos.patch

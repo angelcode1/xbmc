@@ -16,7 +16,7 @@ for i in 1 2 3 4 5 6; do
   if [ "$i" -lt 6 ]; then sleep 5; fi
 done
 "$ADB" logcat -d -b all -v threadtime > "$OUT/logcat-full.txt" 2>&1 || true
-grep -Ei 'GAZELLE_DOVI_RPU|GAZELLE_P7_NALS|AMDV:|OMX|amstream|dv_duallayer|dolby|vdec' "$OUT/logcat-full.txt" > "$OUT/logcat-filtered.txt" || true
+grep -Ei 'GAZELLE_(DOVI|P7)|AMDV:|OMX|amstream|dv_duallayer|dolby|vdec|vfm|dvel|meta_with_el|isdvmetawithel|mAmlCodecParam|parse_metadata|DV=>HDR' "$OUT/logcat-full.txt" > "$OUT/logcat-filtered.txt" || true
 "$ADB" shell 'su -c "cat /sdcard/Android/data/org.xbmc.kodi/files/.kodi/temp/kodi.log"' > "$OUT/kodi.log" 2>&1 || true
 (cd "$(dirname "$OUT")" && zip -qr "$(basename "$OUT").zip" "$(basename "$OUT")")
 echo "UPLOAD: $OUT.zip"

@@ -13,7 +13,7 @@ if [ -z "$PID" ]; then echo 'ERROR: media.codec not running' >&2; exit 1; fi
 count=0
 while IFS= read -r path; do
   case "$path" in
-    */libOmxVideo.so|*/libOmxCore.so|*/libamavutils.so|*/libmediahal_resman.so|*/libstagefrighthw.so) ;;
+    */libOmxVideo.so|*/libOmxCore.so|*/libamavutils.so|*/libmediahal_resman.so|*/libstagefrighthw.so|*/libomx_framework_alt.so|*/libOmxBase.so) ;;
     *) continue ;;
   esac
   dest="$OUT/rootfs$path"

@@ -1,7 +1,7 @@
 name: Gazelle - propose upstream to unified Fire TV Kodi
 
-# After upstream lands in fork master, propose an ordinary merge into the
-# active unified branch. Existing Blu-ray / MakeMKV / DV FEL commits stay intact.
+# The parent-updated fork master is proposed to unified in a fresh staging PR.
+# No merge/conflict resolution touches master or unified automatically.
 on:
   workflow_dispatch:
   push:
@@ -19,87 +19,58 @@ concurrency:
 jobs:
   propose:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 15
     steps:
-      - name: Checkout unified Kodi with full merge history
-        uses: actions/checkout@v4
-        with:
-          ref: android-firetv-unified
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: true
-
-      - name: Create a reviewable upstream-to-unified merge candidate
-        id: prepare
+      - name: Propose the parent-updated fork master to unified Kodi
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch --no-tags origin \
-            +refs/heads/master:refs/remotes/origin/master \
-            +refs/heads/android-firetv-unified:refs/remotes/origin/android-firetv-unified
-          upstream_head="$(git rev-parse refs/remotes/origin/master)"
-          unified_head="$(git rev-parse refs/remotes/origin/android-firetv-unified)"
-          echo "upstream_head=$upstream_head" >> "$GITHUB_OUTPUT"
-          echo "unified_head=$unified_head" >> "$GITHUB_OUTPUT"
 
-          if git merge-base --is-ancestor "$upstream_head" "$unified_head"; then
-            echo "needs_sync=false" >> "$GITHUB_OUTPUT"
-            echo "Fork master already contained in unified Kodi history." >> "$GITHUB_STEP_SUMMARY"
+          master_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/master" --jq '.object.sha')"
+          unified_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/android-firetv-unified" --jq '.object.sha')"
+          [[ "$master_sha" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          [[ "$unified_sha" =~ ^[0-9a-f]{40}$ ]] || exit 2
+
+          ahead="$(gh api "repos/$GITHUB_REPOSITORY/compare/android-firetv-unified...master" --jq '.ahead_by')"
+          [[ "$ahead" =~ ^[0-9]+$ ]] || exit 2
+          if [ "$ahead" -eq 0 ]; then
+            echo "GAZELLE_FORWARD_SYNC_ALREADY_UP_TO_DATE=1" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          branch="sync/kodi-master-to-unified-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          git switch -c "$branch" "$unified_head"
-
-          # Stop rather than silently overriding Kodi, AACS or FEL source.
-          if ! git merge --no-ff --no-edit "$upstream_head"; then
-            echo "::error::Upstream integration has conflicts; unified branch remains unchanged."
-            git diff --name-only --diff-filter=U | tee /tmp/gazelle-conflicts.txt
-            {
-              echo "## Manual merge resolution required"
-              echo "Unified: \`$unified_head\`"
-              echo "Fork master: \`$upstream_head\`"
-              echo "No live branch was changed. Files requiring resolution:"
-              sed 's/^/- /' /tmp/gazelle-conflicts.txt
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 1
+          # Do not spam parallel sync PRs. An existing PR may need a manual
+          # refresh after new master commits, before it is merged.
+          existing="$(gh pr list --repo "$GITHUB_REPOSITORY" \
+            --base android-firetv-unified --state open --limit 100 \
+            --json number,headRefName \
+            --jq 'map(select(.headRefName | startswith("sync/kodi-master-to-unified-"))) | first | .number // empty')"
+          if [ -n "$existing" ]; then
+            echo "GAZELLE_FORWARD_SYNC_EXISTING_PR=$existing" >> "$GITHUB_STEP_SUMMARY"
+            echo "Review/update the existing staging PR; no new branch created." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
 
-          test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
-          git merge-base --is-ancestor "$upstream_head" HEAD
-          git merge-base --is-ancestor "$unified_head" HEAD
+          # A unique fork-owned staging branch points to master, while the
+          # integration branch is untouched. GitHub's PR merge UI will show
+          # conflicts. Fix those in the staging branch before any merge.
+          branch="sync/kodi-master-to-unified-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/heads/$branch" \
+            -f "sha=$master_sha" --silent
 
-          # Fail closed if a merge unexpectedly drops either project.
-          test -f tools/depends/target/libbluray/gazelle-aacs-gate-v1.py
-          test -f tools/depends/target/libbluray/005-android-libmmbd-unversioned-dlopen.patch
-          grep -Fq 'gazelle-aacs-gate-v1.py' tools/depends/target/libbluray/Makefile
-          grep -Fq 'GAZELLE_DOVI_CAPABILITIES' xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp
-          grep -Fq 'GAZELLE_DOVI_MEDIAFORMAT' xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp
-          test -f tools/depends/target/udfread/002-primary-first-metadata.patch
-          grep -Fq 'android-firetv-unified' .github/workflows/android-firetv-bluray.yml
-          echo "GAZELLE_SYNC_SOURCE_PRESERVATION_PASS aacs=1 fel=1 udf=1 workflow=1"
-
-          # Unique staging branch; NEVER update master/unified/issue refs.
-          git push --no-verify origin "HEAD:refs/heads/$branch"
-          echo "needs_sync=true" >> "$GITHUB_OUTPUT"
-          echo "Review branch: \`$branch\`" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Create manual review PR into unified Kodi (no auto-merge)
-        if: steps.prepare.outputs.needs_sync == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SYNC_BRANCH: ${{ steps.prepare.outputs.branch }}
-          FROM_SHA: ${{ steps.prepare.outputs.upstream_head }}
-          INTO_SHA: ${{ steps.prepare.outputs.unified_head }}
-        shell: bash
-        run: |
-          set -euo pipefail
           gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base android-firetv-unified \
-            --head "$SYNC_BRANCH" \
-            --title "Merge Kodi upstream into unified Blu-ray/AACS + DV FEL branch" \
-            --body "Prepared from unified \`$INTO_SHA\` and fork master \`$FROM_SHA\` as a normal two-parent merge. No live branch has been rewritten. Review source changes, require Gazelle preservation checks and a successful ARMv7 build before merging with **Create a merge commit** (never squash). Sync issue branch refs by fast-forward only once validated."
+            --head "$branch" \
+            --title "Review upstream Kodi sync into Blu-ray/AACS and Dolby FEL branch" \
+            --body "Safe staging snapshot of fork master \`$master_sha\` into unified \`$unified_sha\`. This PR does not change either live branch and does not remove their commits. Resolve merge conflicts **on the sync staging branch** without overwriting Blu-ray/AACS, UDF or Dolby Vision FEL changes. Require Gazelle source-preservation CI and a full ARMv7 core build. Merge using **Create a merge commit**, never squash, force push or reset."
+
+          {
+            echo "## Kodi upstream forward-sync staged"
+            echo "Source fork master: \`$master_sha\`"
+            echo "Target unified: \`$unified_sha\`"
+            echo "Staging branch: \`$branch\`"
+            echo "Merge status remains review-only; conflicting files must be resolved before merging."
+          } >> "$GITHUB_STEP_SUMMARY"

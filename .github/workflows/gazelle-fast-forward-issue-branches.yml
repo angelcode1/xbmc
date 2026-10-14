@@ -1,0 +1,57 @@
+name: Gazelle - keep FEL and Blu-ray refs aligned to unified
+
+on:
+  push:
+    branches:
+      - android-firetv-unified
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gazelle-issue-ref-fast-forward
+  cancel-in-progress: false
+
+jobs:
+  fast-forward-only:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout current unified source with merge history
+        uses: actions/checkout@v4
+        with:
+          ref: android-firetv-unified
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: true
+
+      - name: Fast-forward issue refs only if no independent work would be lost
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            +refs/heads/android-firetv-unified:refs/remotes/origin/android-firetv-unified \
+            +refs/heads/android-firetv-bluray:refs/remotes/origin/android-firetv-bluray \
+            +refs/heads/android-firetv-fel:refs/remotes/origin/android-firetv-fel
+
+          unified="$(git rev-parse refs/remotes/origin/android-firetv-unified)"
+          echo "GAZELLE_UNIFIED_HEAD=$unified"
+          for branch in android-firetv-bluray android-firetv-fel; do
+            previous="$(git rev-parse "refs/remotes/origin/$branch")"
+            if [ "$unified" = "$previous" ]; then
+              echo "GAZELLE_ISSUE_REF_ALREADY_ALIGNED branch=$branch"
+              continue
+            fi
+            if ! git merge-base --is-ancestor "$previous" "$unified"; then
+              echo "::error::Preserving divergent issue branch $branch at $previous; merge its new work into unified first."
+              {
+                echo "## Divergent development branch: $branch"
+                echo "No branch ref was changed. Merge its work into unified and rerun."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+            # Plain fast-forward push, no force. GitHub rejects concurrent
+            # updates where the issue ref is no longer an ancestor.
+            git push origin "$unified:refs/heads/$branch"
+            echo "GAZELLE_ISSUE_REF_FAST_FORWARD_PASS branch=$branch old=$previous new=$unified"
+          done

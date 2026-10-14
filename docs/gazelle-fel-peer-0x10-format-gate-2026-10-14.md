@@ -52,3 +52,7 @@ A passing result **is not a runtime FEL result**.
 4. Require EL contribution and real FEL reconstruction before describing the feature as implemented.
 
 Earlier runtime controls remain: P8 native DV output, P7 FEL RPU and EL copied to JNI without corruption (48/48), but kernel `FORMAT_HDR10` and EL VFM `dveldec(0)`.
+
+## Later clarification: owning OMX component fields (14 October 2026)
+
+The two-library framework trace resolved the pointer level: `VendorPeerComponent::setOwner()` stores its `OmxVideoDecoder` owner pointer at peer+4, and the Dolby subclass reads the owner's `+0x20` and `+0x3dc` fields through that pointer. The framework writes owner+0x20/+0x24 from vendor parameter index `0x7f00010d` and initializes owner+0x3dc to `0x0b` for `.dvhe`. Thus earlier descriptions of `peer+0x20 == 0x10` as an intrinsic HEVC-format selector were incomplete: this value can originate from an OMX parameter field and is not a proven FEL-specific switch. See [pinned owner/parameter dataflow trace](gazelle-fel-omx-owner-parameter-trace-2026-10-14.md). The actual runtime value remains unknown.

@@ -24,6 +24,7 @@ on:
       - android-firetv-bluray
       - android-firetv-fel
       - fix/gazelle-virtual-bluray-vfs-files-20261013
+      - diag/gazelle-aacs-gate-v1-20261014
     paths:
       - ".github/workflows/android-firetv-bluray.yml"
       - "cmake/platform/android/**"
@@ -46,7 +47,7 @@ jobs:
 
     env:
       HOST: arm-linux-androideabi
-      BUILD_MODE: ${{ (github.event_name == 'push' && github.ref_name == 'fix/gazelle-virtual-bluray-vfs-files-20261013') && 'routing-core' || inputs.build_mode || github.event.inputs.build_mode || 'full-apk' }}
+      BUILD_MODE: ${{ (github.event_name == 'push' && (github.ref_name == 'fix/gazelle-virtual-bluray-vfs-files-20261013' || github.ref_name == 'diag/gazelle-aacs-gate-v1-20261014')) && 'routing-core' || inputs.build_mode || github.event.inputs.build_mode || 'full-apk' }}
       DEBIAN_FRONTEND: noninteractive
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
@@ -65,6 +66,16 @@ jobs:
           ref: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref_name || 'android-firetv-fel' }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Assert diagnostic-only AACS branch scope
+        if: github.ref_name == 'diag/gazelle-aacs-gate-v1-20261014'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$BUILD_MODE" = routing-core
+          test -f tools/depends/target/libbluray/gazelle-aacs-gate-v1.py
+          grep -q 'GAZELLE_AACS_GATE_V1_DIAGNOSTIC_SOURCE_STAGED_PRODUCTION_UNCHANGED' tools/depends/target/libbluray/Makefile
+          echo 'GAZELLE_DIAGNOSTIC_BRANCH_ONLY original_kodi_unchanged=1 apk_nondeployable=1'
 
       - name: Verify private cube3 read access before expensive Android build
         if: env.BUILD_MODE == 'full-apk'

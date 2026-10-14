@@ -146,17 +146,17 @@ jobs:
             # This workflow signs via the conventional Android debug keystore.
             # Reject incorrectly encoded or unrelated keys instead of silently
             # falling back to a fresh, incompatible signing certificate.
-            keytool -list -keystore "$HOME/.android/debug.keystore" \\
+            keytool -list -keystore "$HOME/.android/debug.keystore" \
               -storepass android -alias androiddebugkey >/dev/null
             echo "GAZELLE_SIGNING_KEY_SOURCE=repository_secret"
           else
-            keytool -genkeypair -keystore "$HOME/.android/debug.keystore" \\
-              -alias androiddebugkey \\
-              -dname "CN=Android Debug,O=Android,C=US" \\
-              -keypass android \\
-              -storepass android \\
-              -keyalg RSA \\
-              -keysize 2048 \\
+            keytool -genkeypair -keystore "$HOME/.android/debug.keystore" \
+              -alias androiddebugkey \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keypass android \
+              -storepass android \
+              -keyalg RSA \
+              -keysize 2048 \
               -validity 10000
             echo "::warning::No GAZELLE_DEBUG_KEYSTORE_B64 secret: APK will have an ephemeral certificate; upgrades across CI runs can fail."
             echo "GAZELLE_SIGNING_KEY_SOURCE=ephemeral"

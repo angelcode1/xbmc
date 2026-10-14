@@ -14,7 +14,7 @@ DEVICE_APK=$("$ADB" shell pm path org.xbmc.kodi | tr -d '\r' | sed -n 's/^packag
 "$ADB" pull "$DEVICE_APK" "$EXISTING"
 
 # Requires Android SDK build-tools' apksigner on your Mac (install if missing).
-APKSIGNER=$(find "$HOME/Library/Android/sdk/build-tools" -type f -name apksigner -print 2>/dev/null | sort -V | tail -n 1)
+APKSIGNER=$(find "$HOME/Library/Android/sdk/build-tools" -type f -name apksigner -print 2>/dev/null | sort | tail -n 1)
 "$APKSIGNER" verify --print-certs "$EXISTING" | grep 'SHA-256 digest'
 "$APKSIGNER" verify --print-certs "$APK" | grep 'SHA-256 digest'
 ```

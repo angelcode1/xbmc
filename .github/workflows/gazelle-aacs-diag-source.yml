@@ -1,0 +1,64 @@
+name: Gazelle AACS Diagnostic Branch Source Gate
+
+on:
+  push:
+    branches:
+      - diag/gazelle-aacs-gate-v1-20261014
+    paths:
+      - '.github/workflows/gazelle-aacs-diag-source.yml'
+      - 'tools/depends/target/libbluray/Makefile'
+      - 'tools/depends/target/libbluray/gazelle-aacs-gate-v1.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic-source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Assert diagnostic branch and pinned source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "diag/gazelle-aacs-gate-v1-20261014"
+          D=tools/depends/target/libbluray
+          grep -q '^VERSION=1.5.0$' "$D/LIBBLURAY-VERSION"
+          grep -q '^SHA512=32725c8490479b134f2fc9ec72e77a6f57a85b3de33a4a3ad2c82575b7045c0d31a997c0dd05f1dc175628cd2ce61f58573f58a7b799057ec4d6984616b0e732$' "$D/LIBBLURAY-VERSION"
+          grep -q 'GAZELLE_AACS_GATE_V1_DIAGNOSTIC_SOURCE_STAGED_PRODUCTION_UNCHANGED' "$D/Makefile"
+          grep -q 'gazelle-aacs-gate-v1.py' "$D/Makefile"
+          grep -q 'GAZELLE_AACS_GATE_TRACE 1' "$D/Makefile"
+          python3 -m py_compile "$D/gazelle-aacs-gate-v1.py"
+          python3 "$D/gazelle-aacs-gate-v1.py" --selftest
+          echo AACS_DIAG_BRANCH_CONTRACT_PASS
+
+      - name: Apply exact libbluray patches to unpacked source (no Kodi build)
+        shell: bash
+        run: |
+          set -euo pipefail
+          D="$GITHUB_WORKSPACE/tools/depends/target/libbluray"
+          ROOT="$(mktemp -d)"
+          trap 'rm -rf "$ROOT"' EXIT
+          curl -fLsS --retry 2 --max-time 90 -o "$ROOT/libbluray-1.5.0.tar.bz2" \
+            https://mirrors.kodi.tv/build-deps/sources/libbluray-1.5.0.tar.bz2
+          printf '%s  %s\n' 32725c8490479b134f2fc9ec72e77a6f57a85b3de33a4a3ad2c82575b7045c0d31a997c0dd05f1dc175628cd2ce61f58573f58a7b799057ec4d6984616b0e732 "$ROOT/libbluray-1.5.0.tar.bz2" | sha512sum --check -
+          tar -xjf "$ROOT/libbluray-1.5.0.tar.bz2" -C "$ROOT"
+          cd "$ROOT/libbluray-1.5.0"
+          patch -p1 -i "$D/005-android-libmmbd-unversioned-dlopen.patch"
+          test "$(sha256sum src/libbluray/disc/aacs.c | cut -d ' ' -f1)" = 74936b808fd5d236af3b6f3f73ef4e711fbf1ea23e3f9dac57051134ded5a3ce
+          python3 "$D/gazelle-aacs-gate-v1.py" \
+            --source src/libbluray/disc/aacs.c \
+            --expected-sha256 74936b808fd5d236af3b6f3f73ef4e711fbf1ea23e3f9dac57051134ded5a3ce \
+            --out src/libbluray/disc/aacs.gazelle-stage-v1.c
+          printf '%s  %s\n' 76c64d58fa109108eda0958cd314df185f2542327f883995ba3a55b653b6357d src/libbluray/disc/aacs.gazelle-stage-v1.c | sha256sum --check -
+          { printf '%s\n' '#if defined(__ANDROID__)' '#define GAZELLE_AACS_GATE_TRACE 1' '#endif'; cat src/libbluray/disc/aacs.gazelle-stage-v1.c; } > src/libbluray/disc/aacs.gazelle-final-v1.c
+          mv src/libbluray/disc/aacs.gazelle-final-v1.c src/libbluray/disc/aacs.c
+          rm src/libbluray/disc/aacs.gazelle-stage-v1.c
+          test "$(grep -c 'GAZELLE_AACS_GATE_V1' src/libbluray/disc/aacs.c)" -eq 5
+          cc -std=c11 -Werror -fsyntax-only -D__ANDROID__ -Isrc -Isrc/libbluray/disc src/libbluray/disc/aacs.c
+          echo AACS_DIAG_LIBBLURAY_150_EXACT_SOURCE_STAGING_PASS
+          echo "device=NOT_TOUCHED kodi=NOT_BUILT apk=NOT_BUILT backend=NOT_STARTED"

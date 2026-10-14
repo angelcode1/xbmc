@@ -89,3 +89,7 @@ Raw logs, test media, and proprietary Amazon firmware libraries/modules are inte
 ## New static trace (later on 2026-10-14)
 
 The `dv_duallayer:1;` literal is **executably referenced** by `AmlogicVideoDecoder::setUp()` at Thumb `0x21ad4` / `0x21ada`, with a HEVC format `0x0b` and component-field `0x10` gate. It is not merely an unreferenced string. See [exact disassembly findings](gazelle-fel-omx-duallayer-xref-2026-10-14.md) and reproducible offline cross-reference script. Whether the active P7 decoder satisfies the second check or receives a per-decoder `0x179` ioctl remains unknown.
+
+## Bridge-library audit (2026-10-14, 13:15 AEST)
+
+The verified five-library bridge capture confirms the plugin loader (`libstagefrighthw.so`) → OMX core (`libOmxCore.so`) → video decoder (`libOmxVideo.so`) chain and maps the active `OMX.amlogic.dolby-vision.dvhe.decoder` to the registered `video_decoder.dolby-vision` role. It does **not** establish the effective peer `+0x20` value, the `dv_duallayer` config string, or a per-decoder ioctl. [Full source-matched disassembly and next gate](gazelle-fel-omx-bridge-audit-2026-10-14.md). No code or device configuration was changed.

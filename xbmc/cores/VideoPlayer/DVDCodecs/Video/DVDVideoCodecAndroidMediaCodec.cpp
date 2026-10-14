@@ -44,6 +44,7 @@
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -996,7 +997,38 @@ bool CDVDVideoCodecAndroidMediaCodec::Open(CDVDStreamInfo &hints, CDVDCodecOptio
       }
     }
     if (m_codec)
+    {
+      if (m_mime == "video/dolby-vision")
+      {
+        // Diagnostic only. These are *advertised* Android codec capabilities.
+        // They are not the actual profile/level sent to the vendor OMX component.
+        const std::vector<CJNIMediaCodecInfoCodecProfileLevel> advertised =
+            codec_caps.profileLevels();
+        std::string profiles;
+        bool advertisesP7 = false;
+        bool advertisesP8 = false;
+        size_t listed = 0;
+        for (const auto& entry : advertised)
+        {
+          const int value = entry.profile();
+          advertisesP7 |= value == 128; // Android DolbyVisionProfileDvheDtb.
+          advertisesP8 |= value == 256; // Android DolbyVisionProfileDvheSt.
+          if (listed++ < 32)
+          {
+            if (!profiles.empty())
+              profiles += ",";
+            profiles += std::to_string(value);
+          }
+        }
+        CLog::Log(LOGINFO,
+                  "GAZELLE_DOVI_CAPABILITIES codec={} advertised_profiles={} "
+                  "advertises_p7={} advertises_p8={} advertised_count={} "
+                  "selection_profile={}",
+                  m_codecname, profiles, advertisesP7, advertisesP8, advertised.size(),
+                  profile);
+      }
       break;
+    }
   }
   if (!m_codec)
   {
@@ -1824,11 +1856,22 @@ bool CDVDVideoCodecAndroidMediaCodec::ConfigureMediaCodec(void)
 
   if (m_mime == "video/dolby-vision")
   {
+    const bool profilePresent = mediaformat.containsKey("profile");
+    const bool levelPresent = mediaformat.containsKey("level");
+    // In the current implementation this profile normally is absent. Do not
+    // set either field without proving the effect on the active OMX instance.
+    const int mediaFormatProfile = profilePresent ? mediaformat.getInteger("profile") : -1;
+    const int mediaFormatLevel = levelPresent ? mediaformat.getInteger("level") : -1;
+    const size_t injectedCsdBytes =
+        m_bitstream ? m_bitstream->GetExtraSize() : m_hints.extradata.GetSize();
     CLog::Log(LOGINFO,
               "GAZELLE_DOVI_MEDIAFORMAT profile={} el_present={} codec={} mime={} "
-              "surface={} width={} height={} csd_source_bytes={}",
+              "surface={} width={} height={} csd_source_bytes={} csd_injected_bytes={} "
+              "has_profile_key={} profile_value={} has_level_key={} level_value={}",
               m_hints.dovi.dv_profile, m_hints.dovi.el_present_flag, m_codecname, m_mime,
-              m_render_surface, m_hints.width, m_hints.height, m_hints.extradata.GetSize());
+              m_render_surface, m_hints.width, m_hints.height, m_hints.extradata.GetSize(),
+              injectedCsdBytes, profilePresent, mediaFormatProfile, levelPresent,
+              mediaFormatLevel);
   }
 
   // configure and start the codec.

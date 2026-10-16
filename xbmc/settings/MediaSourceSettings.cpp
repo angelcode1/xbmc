@@ -76,57 +76,72 @@ bool CMediaSourceSettings::Load()
   const bool loaded = Load(file);
 
 #if defined(TARGET_ANDROID)
-  // Kodi's legacy media source parser maps bare udf:// URLs to D:\\.
-  // Wrap the real optical image with a one-element multipath:// directory;
-  // CMultiPathDirectory decodes it back to the exact UDF VFS path.
-  // Only this Android/Gazelle source is registered. No root or disc I/O.
+  // Only register these sources when the Gazelle-specific mountpoint
+  // already exists. This code neither mounts a disc nor starts root code.
+  constexpr const char* DISC_ROOT =
+      "/data/user/0/org.xbmc.kodi/files/gazelle-kernel-udf/";
+  if (!CFileUtils::Exists(DISC_ROOT))
+    return loaded;
   if (!loaded && CFileUtils::Exists(file))
-    return false; // Preserve malformed or unparseable existing sources.xml.
+    return false; // Never overwrite malformed existing sources.xml.
 
-  constexpr const char* GAZELLE_DISC =
+  constexpr const char* OLD_GAZELLE =
       "multipath://udf%3A%2F%2Fgazelleoptical%253A%252F%252Fdrive0%252Fimage%2F/";
-  constexpr const char* OLD_GAZELLE_UDF =
+  constexpr const char* OLD_UDF =
       "udf://gazelleoptical%3A%2F%2Fdrive0%2Fimage/";
-  bool found = false;
   bool changed = false;
   for (auto& source : m_videoSources)
   {
-    const bool hasWrapper = std::any_of(
-        source.vecPaths.cbegin(), source.vecPaths.cend(),
-        [&](const std::string& path)
-        { return StringUtils::EqualsNoCase(path, GAZELLE_DISC); });
-    const bool hasBareUdf = std::any_of(
-        source.vecPaths.cbegin(), source.vecPaths.cend(),
-        [&](const std::string& path)
-        { return StringUtils::EqualsNoCase(path, OLD_GAZELLE_UDF); });
-    if (!hasWrapper && !hasBareUdf)
+    if (source.strName != "Physical Blu-ray Drive")
       continue;
-    found = true;
-    // Migrate only the exact default source we previously created.
-    if (!hasWrapper && source.strName == "Physical Blu-ray Drive")
+    const bool legacy = std::any_of(
+        source.vecPaths.cbegin(), source.vecPaths.cend(),
+        [&](const std::string& path)
+        {
+          return StringUtils::EqualsNoCase(path, OLD_GAZELLE) ||
+                 StringUtils::EqualsNoCase(path, OLD_UDF);
+        });
+    if (legacy)
     {
-      source.FromNameAndPaths("Physical Blu-ray Drive", {GAZELLE_DISC});
+      source.FromNameAndPaths("Blu-ray Disc", {DISC_ROOT});
       source.m_allowSharing = false;
       changed = true;
     }
   }
-  if (!found)
+  const auto ensureSource = [&](std::vector<CMediaSource>& sources,
+                                const char* name, const char* path)
   {
-    CMediaSource optical;
-    optical.FromNameAndPaths("Physical Blu-ray Drive", {GAZELLE_DISC});
-    optical.m_allowSharing = false;
-    m_videoSources.emplace_back(optical);
+    const bool present = std::any_of(
+        sources.cbegin(), sources.cend(),
+        [&](const CMediaSource& source)
+        {
+          return std::any_of(
+              source.vecPaths.cbegin(), source.vecPaths.cend(),
+              [&](const std::string& existing)
+              { return StringUtils::EqualsNoCase(existing, path); });
+        });
+    if (present)
+      return;
+    CMediaSource source;
+    source.FromNameAndPaths(name, {path});
+    source.m_allowSharing = false;
+    sources.emplace_back(source);
     changed = true;
-  }
+  };
+  ensureSource(m_videoSources, "Blu-ray Disc", DISC_ROOT);
+  ensureSource(m_pictureSources, "Disc Pictures", DISC_ROOT);
+  // This is Kodi's standard CDDA virtual source; actual CDDA on the
+  // Fire OS optical driver is not yet device-qualified.
+  ensureSource(m_musicSources, "Audio CD", "cdda://local/");
+  ensureSource(m_musicSources, "Disc Music Files", DISC_ROOT);
   if (changed)
   {
     if (!Save(file))
     {
-      CLog::Log(LOGERROR, "GAZELLE_OPTICAL_DEFAULT_SOURCE_V2 persist failed");
+      CLog::Log(LOGERROR, "GAZELLE_KERNEL_UDF_SOURCES save failed");
       return false;
     }
-    CLog::Log(LOGINFO, "GAZELLE_OPTICAL_DEFAULT_SOURCE_V2 path={} multipath=1",
-              GAZELLE_DISC);
+    CLog::Log(LOGINFO, "GAZELLE_KERNEL_UDF_SOURCES registered");
   }
   return loaded || changed;
 #endif

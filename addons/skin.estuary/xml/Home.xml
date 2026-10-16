@@ -187,6 +187,13 @@
 					<control type="grouplist" id="7001">
 						<include>WidgetGroupListCommon</include>
 						<pagecontrol>7010</pagecontrol>
+                    <!-- Gazelle optical media as native Music source tiles -->
+                    <include content="WidgetListCategories">
+                        <param name="content_path" value="sources://music/"/>
+                        <param name="widget_header" value="Audio Discs &amp; Music Files"/>
+                        <param name="widget_target" value="music"/>
+                        <param name="list_id" value="7050"/>
+                    </include>
 						<include content="WidgetListCategories" condition="Library.HasContent(music) + !Skin.HasSetting(home_no_music_categories_widget)">
 							<param name="content_path" value="library://music/"/>
 							<param name="widget_header" value="$LOCALIZE[31148]"/>

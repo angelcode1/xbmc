@@ -36,7 +36,7 @@ def verified_bytes(path, sha):
 def arm_elf(data, *, pie=False):
     if len(data) < 52 or data[:4] != b"\x7fELF":
         raise ValueError("Missing ELF magic")
-    if data[4:7] != b"\\x01\\x01\\x01":
+    if data[4:7] != b"\x01\x01\x01":
         raise ValueError("Not little-endian ELF32")
     kind, arch = struct.unpack_from("<HH", data, 16)
     if arch != 40 or kind != 3:

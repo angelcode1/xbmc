@@ -21,3 +21,22 @@ registration files, keys, or private media. Existing libbluray AACS source
 changes remain, but protected-disc playback requires the separately
 installed qualified MMBD runtime. CI pass does not qualify the new source
 APK on a Cube; preserve the currently working signed APK for rollback.
+
+## Source tile defaults and add-on activation
+
+The source-based entries are created on the first Android settings load even if
+no optical media is inserted: Videos / Blu-ray Disc, Pictures / Disc Pictures,
+Music / Audio CD and Music / Disc Music Files. They are **Kodi sources**, not
+independent top-level Estuary home buttons; Music also exposes the Sources
+widget. A missing mount produces an inaccessible disc source, not a mount.
+
+The addon is packaged as an *optional system addon*. Kodi enables newly
+discovered optional system addons by default; an existing persisted disabled
+state remains disabled. The Python navigator checks the read-only UDF mount
+before listing paths, and does not install kernel modules or start root services.
+CDDA playback on Fire TV Cube has not been verified.
+
+**Do not replace a working Kodi APK solely because CI passes.** The build
+may use an ephemeral signing certificate when no stable signing keystore secret
+is configured. Verify the installed and candidate signatures match, and
+preserve the installed APK and user data before attempting an update.

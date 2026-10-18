@@ -84,12 +84,13 @@ bool CMediaSourceSettings::Load()
   const bool loaded = Load(file);
 
 #if defined(TARGET_ANDROID)
-  // Only register these sources when the Gazelle-specific mountpoint
-  // already exists. This code neither mounts a disc nor starts root code.
+  // Register Gazelle disc shortcuts on every Kodi startup, even without
+  // a mounted disc. These are inert media-source entries, not mount requests.
+  // Never use CFileUtils::Exists() on a directory (PosixFile rejects dirs).
+  // The kernel-UDF plugin separately validates a read-only /dev/block/sr0
+  // mount before allowing navigation or playback.
   constexpr const char* DISC_ROOT =
       "/data/user/0/org.xbmc.kodi/files/gazelle-kernel-udf/";
-  if (!CFileUtils::Exists(DISC_ROOT))
-    return loaded;
   if (!loaded && CFileUtils::Exists(file))
     return false; // Never overwrite malformed existing sources.xml.
 

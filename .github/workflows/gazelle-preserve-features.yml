@@ -44,6 +44,14 @@ jobs:
           test ! -f tools/android/packaging/gazelle/prepare_optical_addons.py
           test ! -f tools/android/packaging/gazelle/verify_optical_apk.py
           grep -Fq GAZELLE_KERNEL_UDF_FILESMODE xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
+          # Kodi's PosixFile::Exists never reports directories as files.
+          # Optical shortcuts must be available before a disc is mounted.
+          ! grep -Fq 'if (!CFileUtils::Exists(DISC_ROOT))' xbmc/settings/MediaSourceSettings.cpp
+          grep -Fq 'Register Gazelle disc shortcuts on every Kodi startup' xbmc/settings/MediaSourceSettings.cpp
+          grep -Fq 'ensureSource(GetSources(MediaSection::VIDEO), "Blu-ray Disc"' xbmc/settings/MediaSourceSettings.cpp
+          grep -Fq 'ensureSource(GetSources(MediaSection::PICTURES), "Disc Pictures"' xbmc/settings/MediaSourceSettings.cpp
+          grep -Fq 'ensureSource(GetSources(MediaSection::MUSIC), "Audio CD"' xbmc/settings/MediaSourceSettings.cpp
+          grep -Fq 'ensureSource(GetSources(MediaSection::MUSIC), "Disc Music Files"' xbmc/settings/MediaSourceSettings.cpp
           echo "GAZELLE_AACS_SOURCE_PRESERVED_PASS"
 
           # Dolby Vision P7 and native OMX analysis/configuration.

@@ -18,6 +18,8 @@ on:
       - ".github/workflows/android-firetv-bluray.yml"
       - "cmake/platform/android/**"
       - "tools/depends/**"
+      - "tools/android/packaging/**"
+      - "addons/plugin.video.gazelle.kerneludf/**"
       - "xbmc/**"
       - "docs/firetv-android-bluray-notes.md"
 

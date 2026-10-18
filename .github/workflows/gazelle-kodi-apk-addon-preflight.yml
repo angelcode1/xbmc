@@ -28,13 +28,18 @@ jobs:
           set -euo pipefail
           python3 -m py_compile tools/android/packaging/gazelle/stage_kernel_addon.py tools/android/packaging/gazelle/verify_kernel_apk.py addons/plugin.video.gazelle.kerneludf/default.py
           python3 tools/android/packaging/gazelle/stage_kernel_addon.py --root "$GITHUB_WORKSPACE" --depends-prefix "$RUNNER_TEMP/staged"
+          mkdir -p "$RUNNER_TEMP/apk-assets/system"
+          cp system/addon-manifest.xml "$RUNNER_TEMP/apk-assets/system/addon-manifest.xml"
+          python3 tools/android/packaging/gazelle/stage_kernel_addon.py --root "$GITHUB_WORKSPACE" --assets "$RUNNER_TEMP/apk-assets"
           python3 - <<'PY'
           import os, pathlib, zipfile
-          stage = pathlib.Path(os.environ['RUNNER_TEMP']) / 'staged/share/kodi/addons/plugin.video.gazelle.kerneludf'
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'apk-assets'
           with zipfile.ZipFile('/tmp/gazelle-kernel-test.apk', 'w') as archive:
-              for src in stage.iterdir():
-                  archive.write(src, 'assets/addons/plugin.video.gazelle.kerneludf/' + src.name)
+              for src in root.rglob('*'):
+                  if src.is_file():
+                      archive.write(src, 'assets/' + str(src.relative_to(root)))
           PY
           python3 tools/android/packaging/gazelle/verify_kernel_apk.py /tmp/gazelle-kernel-test.apk
+          grep -Fq 'stage_kernel_addon.py --root $(CMAKE_SOURCE_DIR) --assets ./assets' tools/android/packaging/Makefile.in
           ! grep -Eiq 'angelcode1/cube3|CUBE3_READ_TOKEN|gazelle-cube3-optical' .github/workflows/android-firetv-bluray.yml
           echo GAZELLE_SELF_CONTAINED_KERNEL_ADDON_PASS

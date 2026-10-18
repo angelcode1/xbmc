@@ -22,9 +22,9 @@ Old userspace `vfs.gazelle.physical` and
 **Runtime boundary:** The APK does not distribute the proprietary Linux MakeMKV runtime,
 device-specific kernel modules, privileged MMBD brokers, registration
 files, keys, or private media. It does distribute the standalone
-open-source Android LibMMBD v1.8.0 binary and separately compiled helper. Existing libbluray AACS source
-changes remain, but protected-disc playback requires the separately
-installed qualified MMBD runtime. CI pass does not qualify the new source
+open-source Android LibMMBD v1.8.0 binary and separately compiled helper. Existing libbluray AACS source changes remain, but playback needs the
+separate self-contained Magisk backend to be locally provisioned and
+qualified on the rooted Cube. CI pass does not qualify the new source
 APK on a Cube; preserve the currently working signed APK for rollback.
 
 ## Source tile defaults and add-on activation
@@ -100,3 +100,21 @@ startup, local media, source tiles and addon safety—not AACS playback.
 - The previously working rooted-Cube helper checksum was
   `c8005d1b168f42024f72de78ae64dcf66f4b142583d3afc92fd97ac72ce9172c`. A recompiled helper is not automatically equivalent;
   on-device authentication and protected-disc playback are not certified.
+
+## Independent backend/frontend release contract (18 October 2026)
+
+The Magisk module is assembled offline using a user-provided private
+ARMhf/glibc runtime backup as input. It packages a sanitized runtime
+archive alongside pinned kernel modules and the MMBD broker; it does
+not publish or embed MakeMKV registration, private keys or disc material.
+Provisioning the module runtime locally is a guarded explicit action.
+No unattended kernel module insertion, UDF mount or broker startup
+is enabled. The Kodi APK never pulls files from that repository.
+
+For a new installation: install the approved Magisk ZIP and standalone
+Kodi APK, verify the app's newly allocated UID and SELinux categories,
+then explicitly activate the rootfs, approved read-only mount and
+current-UID-authenticated broker. Keep working signed APK and Magisk ZIP
+for rollback. Neither the new helper compiled with NDK r28c nor a source
+build has proven binary-equivalent to the working October 17 ELF; verify
+it on the device before treating protected disc support as complete.

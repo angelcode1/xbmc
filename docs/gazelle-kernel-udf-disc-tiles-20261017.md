@@ -1,49 +1,25 @@
-# Gazelle kernel-UDF Blu-ray and optical media tiles — 2026-10-17
+# Gazelle kernel-UDF source entries and playback route
 
-## Verified device baseline
-The user confirmed physical UHD Blu-ray playback works on rooted Fire TV Cube 3
-with the kernel UDF mount at
-`/data/user/0/org.xbmc.kodi/files/gazelle-kernel-udf`, read-only
-`uid=10250,gid=10250`, and root MMBD broker
-`48652fca416514026ff7c6e4d998491209a5bdd9ab79bd3320c12e1a72d99421`.
-LibMMBD v1.8.0 and the native helper passed their SHA checks.
-The successful installed APK used a four-byte ARM instruction patch,
-patched core SHA256
-`7b583d7b9201d6ef3d2b2a0b1da7823732beb1302ecf076ee56d0b8a61965401`.
+Current implementation: `android-firetv-unified`. The 17 October 2026
+proof is a **historical single-device acceptance** obtained with a
+four-byte ARMv7 binary patch. The maintainable source route now calls
+`bd_open_files()` for the exact app-private kernel-UDF location.
+It still requires fresh on-device acceptance testing.
 
-**This source change has NOT been built or run on the device.** It expresses
-the working binary route as an exact-mount-path C++ condition. Never
-combine the source change with the old unconditional instruction patch.
+Kodi registers four *media source entries* on initial settings load
+without requiring a disc to be mounted:
+- Videos / Blu-ray Disc
+- Pictures / Disc Pictures
+- Music / Audio CD
+- Music / Disc Music Files
 
-## Automatic Kodi media-source tiles
-On Kodi source settings load, when the app-private Gazelle mountpoint exists:
-- Videos: `Blu-ray Disc` => mounted filesystem
-- Pictures: `Disc Pictures` => mounted filesystem
-- Music: `Audio CD` => `cdda://local/`
-- Music: `Disc Music Files` => mounted filesystem
+These are source entries rather than four standalone home-screen
+buttons. The kernel navigator refuses UDF mounts with an old Kodi UID,
+or mounted from a device other than `/dev/block/sr0`. It does not
+mount, eject, read raw sectors, start a broker or change SELinux.
 
-Kodi's built-in sources directory is used, with an Estuary Music sources widget;
-there is no manual Add Source step on initial setup.
-Known legacy `Physical Blu-ray Drive` userspace source entries are migrated
-only when matching the exact older VFS path. Existing unrelated sources remain.
-CDDA playback and its virtual path on this Fire OS kernel are **untested**;
-a CD audio tile is not proof of CD playback. UDF mount visibility and content
-classification for inserted optical media still require device acceptance.
-The source manager does not start root services or mount media.
+Only a separately qualified Magisk backend may load the optical/UDF
+drivers and provide the root MMBD broker and complete ARMhf runtime.
+CDDA and true FEL playback remain unqualified on a clean-installed Cube.
 
-## Repository preservation / upstream updates
-- This feature branch is based on `android-firetv-unified`.
-- The previous userspace UDF VFS lives in `angelcode1/cube3` under
-  `blu-ray/physical-udf` and related historical branches. Archive it;
-  do not delete files or history.
-- Keep MMBD startup service `service.gazelle.mmbd`, LibMMBD, the native
-  helper and authenticated root broker. After reinstalling Kodi, its UID
-  changes; restart the broker to refresh its authenticated Kodi UID.
-- Keep Linux ARMhf MakeMKV's private runtime, settings and disc secrets
-  off GitHub. The official upstream Kodi merge must preserve exact-path
-  `bd_open_files()` routing, automatic sources and the native library
-  provisioning contract.
-- To sync with upstream, fetch upstream Kodi, rebase/cherry-pick the
-  focused changes to these three files, resolve API/skin changes, then
-  rebuild/sign and test on the Cube. Do not overwrite the last known
-  working locally signed APK or change workflows as part of this work.
+See [standalone APK build](gazelle-kernel-udf-self-contained-build.md).

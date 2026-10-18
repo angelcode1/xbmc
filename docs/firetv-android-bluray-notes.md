@@ -1,3 +1,9 @@
+> **Historical FEL experiments.** This page records October 2026
+> technical observations, not current fresh-install procedures.
+> For the current completely source-local APK workflow and backend
+> boundary, see [Gazelle build](gazelle-kernel-udf-self-contained-build.md).
+> Do not follow the old userspace optical route for new installs.
+
 # Fire OS 7 / Android Blu-ray and Dolby Vision FEL — Gazelle engineering status
 
 > **2026-10-14 update:** The six-checkpoint live P8/P7 comparison, ABI analysis and subsequent experiments are documented in [the current Gazelle FEL investigation](gazelle-fel-native-omx-2026-10-14.md). Earlier stream-mode device examples and next-steps below refer to the historical Stage 1 configuration; the current working control uses frame mode (`/dev/amstream_dves_hevc_frame`, `vendor.media.omx.use_dv_frame=true`).

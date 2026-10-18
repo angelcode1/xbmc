@@ -21,8 +21,20 @@ def get_readonly_mount():
                 if len(fields) < 6 or len(source) < 3:
                     continue
                 path = fields[4].replace(r"\040", " ")
-                if (path in MOUNTS and source[:2] == ["udf", "/dev/block/sr0"]
-                        and "ro" in fields[5].split(",") and os.path.isdir(path)):
+                if path not in MOUNTS or source[:2] != ["udf", "/dev/block/sr0"]:
+                    continue
+                if "ro" not in fields[5].split(",") or "ro" not in source[2].split(","):
+                    continue
+                options = dict(part.split("=", 1) for part in source[2].split(",")
+                               if "=" in part)
+                if (options.get("uid") != str(os.getuid()) or
+                        options.get("gid") != str(os.getgid())):
+                    xbmcgui.Dialog().notification(
+                        "Kernel UDF Optical Disc",
+                        "Mount belongs to an older Kodi UID; reprovision it",
+                        xbmcgui.NOTIFICATION_WARNING, 6000)
+                    continue
+                if os.path.isdir(path):
                     return path
     except OSError:
         pass

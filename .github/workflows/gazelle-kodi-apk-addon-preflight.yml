@@ -41,5 +41,11 @@ jobs:
           PY
           python3 tools/android/packaging/gazelle/verify_kernel_apk.py /tmp/gazelle-kernel-test.apk
           grep -Fq 'stage_kernel_addon.py --root $(CMAKE_SOURCE_DIR) --assets ./assets' tools/android/packaging/Makefile.in
+          sh -n tools/android/packaging/gazelle/kodi-uid-provision.sh
+          bash -n tools/android/packaging/gazelle/kodi-clean-install-macos.sh
+          sh tools/android/packaging/gazelle/kodi-uid-provision.sh --selftest
+          # Never allow recursive modification or automatic mount changes.
+          ! grep -Eq 'chown[[:space:]]+-R|chcon[[:space:]]+-R|umount[[:space:]]|mount[[:space:]]+-t' tools/android/packaging/gazelle/kodi-uid-provision.sh
+          grep -Fq 'kodi-uid-provision.sh' .github/workflows/android-firetv-bluray.yml
           ! grep -Eiq 'angelcode1/cube3|CUBE3_READ_TOKEN|gazelle-cube3-optical' .github/workflows/android-firetv-bluray.yml
           echo GAZELLE_SELF_CONTAINED_KERNEL_ADDON_PASS

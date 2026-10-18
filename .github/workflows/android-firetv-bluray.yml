@@ -288,6 +288,8 @@ jobs:
           name: kodi-android-firetv-${{ github.run_id }}-kernel-udf-armv7-apk
           path: |
             kodi-build/**/*.apk
+            tools/android/packaging/gazelle/kodi-uid-provision.sh
+            tools/android/packaging/gazelle/kodi-clean-install-macos.sh
           if-no-files-found: error
 
       - name: Upload configure/build logs

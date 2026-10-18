@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import re
+import struct
 import zipfile
 from xml.etree import ElementTree
 
@@ -54,6 +55,10 @@ def verify(apk, *, kernel_only=False):
             return found.group(1)
         lib = archive.read(native_prefix+"libmmbd.so")
         helper = archive.read(native_prefix+"libgazelle_mmbd_v2.so")
+        for filename, data in (("libmmbd", lib), ("MMBD helper", helper)):
+            if (len(data) < 52 or data[:7] != b"\x7fELF\x01\x01\x01"
+                    or struct.unpack_from("<HH", data, 16) != (3, 40)):
+                raise ValueError(filename + " is not ARMv7 ELF32 ET_DYN")
         if hashlib.sha256(lib).hexdigest() != pin("LIB_SHA"):
             raise ValueError("MMBD native library mismatch")
         if hashlib.sha256(helper).hexdigest() != pin("HELPER_SHA"):

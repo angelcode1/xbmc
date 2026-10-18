@@ -134,11 +134,24 @@ jobs:
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
           yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
-          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" \
-            "platform-tools" \
-            "platforms;android-37.0" \
-            "build-tools;37.0.0" \
-            "ndk;28.2.13676358"
+          # Android's SDK NDK server occasionally returns a truncated ZIP.
+          # Retry only within this ephemeral CI environment.
+          installed=0
+          for attempt in 1 2 3; do
+            if "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" \
+                "platform-tools" \
+                "platforms;android-37.0" \
+                "build-tools;37.0.0" \
+                "ndk;28.2.13676358"; then
+              installed=1
+              break
+            fi
+            echo "::warning::SDK NDK download/extract failed, attempt $attempt"
+            rm -rf "$ANDROID_SDK_ROOT/ndk/28.2.13676358"
+            sleep 10
+          done
+          test "$installed" = 1
+          test -x "$ANDROID_SDK_ROOT/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi28-clang"
           ls -la "$ANDROID_SDK_ROOT/ndk"
 
       - name: Restore stable debug signing key or generate temporary key

@@ -50,6 +50,9 @@ android {
       doNotStrip '**.setup'
       jniLibs {
           useLegacyPackaging = true
+          // The MMBD service pins the exact ELF bytes; Gradle must not
+          // silently strip either the LGPL library or the executable PIE.
+          keepDebugSymbols += ['**/libmmbd.so', '**/libgazelle_mmbd_v2.so']
       }
       exclude '**/*.kotlin_builtins'
       exclude 'META-INF/kotlinx_coroutines*'

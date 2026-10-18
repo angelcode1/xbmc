@@ -118,3 +118,14 @@ current-UID-authenticated broker. Keep working signed APK and Magisk ZIP
 for rollback. Neither the new helper compiled with NDK r28c nor a source
 build has proven binary-equivalent to the working October 17 ELF; verify
 it on the device before treating protected disc support as complete.
+
+## LibMMBD distribution notices
+
+The APK includes the LGPL-2.1 text and source retrieval instructions in
+`assets/licenses/`. The binary was built from MakeMKV OSS 2.0.0 with an
+Android ARMv7/API28 cross-build. Its corresponding source and license are
+available separately from the upstream MakeMKV OSS package; it is
+**not** the proprietary Linux ARMhf MakeMKV runtime. For local copies
+and redistributions, verify the applicable license obligations and retain
+the corresponding source/build information. No MakeMKV registration keys
+or proprietary runtime snapshots are stored in this public repository.

@@ -42,7 +42,9 @@ def verify(apk, *, kernel_only=False):
         mm_prefix = "assets/addons/" + mm_service + "/"
         native_prefix = "lib/armeabi-v7a/"
         extra = {mm_prefix+"addon.xml", mm_prefix+"service.py",
-                 native_prefix+"libmmbd.so", native_prefix+"libgazelle_mmbd_v2.so"}
+                 native_prefix+"libmmbd.so", native_prefix+"libgazelle_mmbd_v2.so",
+                 "assets/licenses/gazelle-libmmbd-LGPL-2.1.txt",
+                 "assets/licenses/gazelle-libmmbd-source.txt"}
         missing = sorted(extra - paths)
         if missing:
             raise ValueError("Missing standalone MMBD APK payload: " + str(missing))

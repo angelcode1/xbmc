@@ -98,6 +98,20 @@ def prepare(root, assets, build_dir, ndk):
         ElementTree.SubElement(manifest, "addon", {"optional": "true"}).text = ADDON
     ElementTree.indent(tree, space="  ")
     tree.write(manifest_file, encoding="utf-8", xml_declaration=True)
+    # Keep the LGPL terms and corresponding source location beside the
+    # redistributable Android LibMMBD binary in the finished APK.
+    license_src = root / "LICENSES/LGPL-2.1-or-later"
+    if not license_src.is_file():
+        raise ValueError("LGPL-2.1 license text missing")
+    license_dir = assets / "licenses"
+    license_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(license_src, license_dir / "gazelle-libmmbd-LGPL-2.1.txt")
+    (license_dir / "gazelle-libmmbd-source.txt").write_text(
+        "MakeMKV OSS v2.0.0 LibMMBD is LGPL licensed.\n"
+        "Corresponding upstream source: https://www.makemkv.com/download/makemkv-oss-2.0.0.tar.gz\n"
+        "The Android ARMv7 API28 local build used OpenSSL 1.1.1w, expat 2.6.4,\n"
+        "FFmpeg 6.1.2 and Android NDK r26d with GNU LGPL terms.\n",
+        encoding="utf-8")
     (build_dir / "helper.sha256").write_text(helper_sha + "\n")
     print("GAZELLE_MMBD_LOCAL_COMPILE_PASS lib=" + LIB_SHA + " helper=" + helper_sha)
 

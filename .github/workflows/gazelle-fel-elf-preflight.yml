@@ -1,0 +1,29 @@
+name: Gazelle FEL APK ELF offline regression gate
+
+on:
+  push:
+    branches:
+      - diag/gazelle-fel-apk-preflight-20261019
+    paths:
+      - .github/workflows/gazelle-fel-elf-preflight.yml
+      - tools/android/packaging/gazelle/test_stage_mmbd_elf.py
+      - tools/android/packaging/gazelle/stage_mmbd_apk.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  elf32-arm-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile-check and regression test bundled ELF validator
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/android/packaging/gazelle/stage_mmbd_apk.py tools/android/packaging/gazelle/test_stage_mmbd_elf.py
+          python3 tools/android/packaging/gazelle/test_stage_mmbd_elf.py
+          echo "GAZELLE_FEL_APK_ELF_PREFLIGHT_PASS"

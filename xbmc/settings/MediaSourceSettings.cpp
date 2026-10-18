@@ -98,7 +98,7 @@ bool CMediaSourceSettings::Load()
   constexpr const char* OLD_UDF =
       "udf://gazelleoptical%3A%2F%2Fdrive0%2Fimage/";
   bool changed = false;
-  for (auto& source : m_videoSources)
+  for (auto& source : GetSources(MediaSection::VIDEO))
   {
     if (source.strName != "Physical Blu-ray Drive")
       continue;
@@ -136,12 +136,12 @@ bool CMediaSourceSettings::Load()
     sources.emplace_back(source);
     changed = true;
   };
-  ensureSource(m_videoSources, "Blu-ray Disc", DISC_ROOT);
-  ensureSource(m_pictureSources, "Disc Pictures", DISC_ROOT);
+  ensureSource(GetSources(MediaSection::VIDEO), "Blu-ray Disc", DISC_ROOT);
+  ensureSource(GetSources(MediaSection::PICTURES), "Disc Pictures", DISC_ROOT);
   // This is Kodi's standard CDDA virtual source; actual CDDA on the
   // Fire OS optical driver is not yet device-qualified.
-  ensureSource(m_musicSources, "Audio CD", "cdda://local/");
-  ensureSource(m_musicSources, "Disc Music Files", DISC_ROOT);
+  ensureSource(GetSources(MediaSection::MUSIC), "Audio CD", "cdda://local/");
+  ensureSource(GetSources(MediaSection::MUSIC), "Disc Music Files", DISC_ROOT);
   if (changed)
   {
     if (!Save(file))

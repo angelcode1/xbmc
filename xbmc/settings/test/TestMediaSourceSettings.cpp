@@ -162,7 +162,7 @@ TEST_F(TestMediaSourceSettingsDevicePath, GazelleMultipathSourceSaveReload)
   ASSERT_EQ(decoded.size(), 1);
   EXPECT_EQ(decoded.front(), udf);
 
-  GetSources("video")->push_back(source);
+  GetSources(MediaSection::VIDEO).push_back(source);
   XFILE::CFile* file = XBMC_CREATETEMPFILE(".xml");
   ASSERT_NE(file, nullptr);
   const std::string xmlFile = XBMC_TEMPFILEPATH(file);
@@ -172,13 +172,13 @@ TEST_F(TestMediaSourceSettingsDevicePath, GazelleMultipathSourceSaveReload)
   ASSERT_TRUE(Load(xmlFile));
   ASSERT_TRUE(XBMC_DELETETEMPFILE(file));
 
-  const auto* videoSources = GetSources("video");
-  ASSERT_EQ(videoSources->size(), 1);
-  EXPECT_EQ(videoSources->front().strName, "Physical Blu-ray Drive");
-  EXPECT_EQ(videoSources->front().strPath, disc);
-  ASSERT_EQ(videoSources->front().vecPaths.size(), 1);
-  EXPECT_EQ(videoSources->front().vecPaths.front(), disc);
-  EXPECT_FALSE(videoSources->front().m_allowSharing);
+  const auto& videoSources = GetSources(MediaSection::VIDEO);
+  ASSERT_EQ(videoSources.size(), 1);
+  EXPECT_EQ(videoSources.front().strName, "Physical Blu-ray Drive");
+  EXPECT_EQ(videoSources.front().strPath, disc);
+  ASSERT_EQ(videoSources.front().vecPaths.size(), 1);
+  EXPECT_EQ(videoSources.front().vecPaths.front(), disc);
+  EXPECT_FALSE(videoSources.front().m_allowSharing);
 }
 
 TEST(TestMediaSourceSettings, LoadString)

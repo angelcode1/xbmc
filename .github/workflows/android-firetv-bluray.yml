@@ -1,23 +1,16 @@
 name: Gazelle Unified Kodi Core - Blu-ray AACS and Dolby FEL
 
 on:
-  workflow_call:
-    inputs:
-      build_mode:
-        description: "Build scope"
-        type: string
-        required: false
-        default: routing-core
   workflow_dispatch:
     inputs:
       build_mode:
         description: "Build scope"
         type: choice
         required: true
-        default: routing-core
+        default: full-apk
         options:
           - depends-only
-          - routing-core
+          - full-apk
   push:
     branches:
       - android-firetv-unified
@@ -37,13 +30,13 @@ concurrency:
 
 jobs:
   android-armv7:
-    name: Android ARMv7 FireTV libbluray/APK
+    name: Android ARMv7 kernel UDF Kodi APK
     runs-on: ubuntu-22.04
     timeout-minutes: 360
 
     env:
       HOST: arm-linux-androideabi
-      BUILD_MODE: ${{ inputs.build_mode || github.event.inputs.build_mode || 'routing-core' }}
+      BUILD_MODE: ${{ inputs.build_mode || github.event.inputs.build_mode || 'full-apk' }}
       DEBIAN_FRONTEND: noninteractive
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
@@ -53,13 +46,9 @@ jobs:
       MAKEFLAGS: -j2
 
     steps:
-      - name: Checkout public Kodi fork
+      - name: Checkout this repository
         uses: actions/checkout@v4
         with:
-          repository: angelcode1/xbmc
-          # On this repository, build precisely the triggering commit, not the
-          # stale 'android-firetv-fel' branch. Preserve cube3's external-call pin.
-          ref: ${{ github.repository == 'angelcode1/xbmc' && github.sha || 'android-firetv-unified' }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -75,23 +64,19 @@ jobs:
             exit 1
           fi
 
-      - name: Assert combined source and nondeployable public routing-core scope
+      - name: Require kernel UDF plus AACS and FEL source
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$BUILD_MODE" != "routing-core" ] && [ "$BUILD_MODE" != "depends-only" ]; then
-            echo "::error::Unified Kodi public job only supports routing-core or depends-only."
-            exit 2
-          fi
+          test "$BUILD_MODE" = full-apk || test "$BUILD_MODE" = depends-only
           test -f tools/depends/target/libbluray/gazelle-aacs-gate-v1.py
           test -f tools/depends/target/libbluray/005-android-libmmbd-unversioned-dlopen.patch
-          grep -q 'gazelle-aacs-gate-v1.py' tools/depends/target/libbluray/Makefile
-          grep -q 'GAZELLE_AACS_GATE_V1' tools/depends/target/libbluray/gazelle-aacs-gate-v1.py
-          grep -q 'GAZELLE_DOVI_CAPABILITIES' xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp
-          grep -q 'GAZELLE_DOVI_MEDIAFORMAT' xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp
-          test -f xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
-          echo "GAZELLE_UNIFIED_SOURCE_GATE_PASS aacs=1 bluray_vfs=1 dolby_fel=1"
-          echo "GAZELLE_PUBLIC_ROUTING_CORE_ONLY_PRIVATE_OPTICAL_COMPONENTS_REQUIRED=1"
+          grep -Fq GAZELLE_DOVI_CAPABILITIES xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp
+          grep -Fq GAZELLE_DOVI_MEDIAFORMAT xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp
+          grep -Fq GAZELLE_KERNEL_UDF_FILESMODE xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
+          test -f addons/plugin.video.gazelle.kerneludf/addon.xml
+          test -f tools/android/packaging/gazelle/stage_kernel_addon.py
+          echo GAZELLE_KERNEL_UDF_SOURCE_PASS
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -145,7 +130,7 @@ jobs:
           yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" \
             "platform-tools" \
-            "platforms;android-37.0" \
+            "platforms;android-37" \
             "build-tools;37.0.0" \
             "ndk;28.2.13676358"
           ls -la "$ANDROID_SDK_ROOT/ndk"
@@ -221,6 +206,12 @@ jobs:
             exit "$status"
           fi
 
+      - name: Stage in-repository kernel UDF addon
+        if: env.BUILD_MODE == 'full-apk'
+        run: |
+          set -euo pipefail
+          python3 tools/android/packaging/gazelle/stage_kernel_addon.py --root "$GITHUB_WORKSPACE" --depends-prefix "$DEPENDS_PREFIX"
+
       - name: Verify libbluray and udfread depends output
         run: |
           set -eux
@@ -230,13 +221,13 @@ jobs:
           find "$DEPENDS_PREFIX" -maxdepth 6 \( -iname '*bluray*.pc' -o -iname '*udf*.pc' -o -iname '*aacs*.pc' -o -iname '*bdplus*.pc' -o -iname '*bluray*config*.cmake' \) -print | sort || true
 
       - name: Configure Kodi CMake build
-        if: env.BUILD_MODE == 'routing-core'
+        if: env.BUILD_MODE == 'full-apk'
         run: |
           set -eux
           make -C tools/depends/target/cmakebuildsys BUILD_DIR="$BUILD_DIR"
 
       - name: Build Kodi
-        if: env.BUILD_MODE == 'routing-core'
+        if: env.BUILD_MODE == 'full-apk'
         shell: bash
         run: |
           set -euo pipefail
@@ -265,31 +256,36 @@ jobs:
           fi
 
       - name: Check compiled Blu-ray defines
-        if: env.BUILD_MODE == 'routing-core'
+        if: env.BUILD_MODE == 'full-apk'
         run: |
           set -eux
           grep -R "HAVE_LIBBLURAY\|HAS_UDFREAD" "$BUILD_DIR" CMakeFiles 2>/dev/null | head -80 || true
 
       - name: Package APK
-        if: env.BUILD_MODE == 'routing-core'
+        if: env.BUILD_MODE == 'full-apk'
         run: |
           set -eux
           make -C "$BUILD_DIR" apk
           find "$GITHUB_WORKSPACE" -iname '*.apk' -print -exec ls -lh {} \;
 
-      - name: Mark public routing core as not integrated
-        if: env.BUILD_MODE == 'routing-core'
+      - name: Verify kernel UDF addon and absence of legacy VFS
+        if: env.BUILD_MODE == 'full-apk'
+        shell: bash
         run: |
-          echo "::warning::This Kodi APK is a unified AACS+FEL routing core only. It omits private optical/LibMMBD integration. Do not install as the final Cube3 test APK; use the Cube3 unified packaging workflow."
-          echo "GAZELLE_PUBLIC_ROUTING_CORE_ONLY=1"
+          set -euo pipefail
+          mapfile -d '' apks < <(find "$BUILD_DIR" -type f -name '*.apk' -print0)
+          test "${#apks[@]}" -gt 0
+          for apk in "${apks[@]}"; do
+            python3 tools/android/packaging/gazelle/verify_kernel_apk.py "$apk"
+          done
 
       - name: Upload APKs
-        if: env.BUILD_MODE == 'routing-core'
+        if: env.BUILD_MODE == 'full-apk'
         uses: actions/upload-artifact@v4
         with:
-          name: kodi-android-firetv-${{ github.run_id }}-routing-core-armv7-apk
+          name: kodi-android-firetv-${{ github.run_id }}-kernel-udf-armv7-apk
           path: |
-            **/*.apk
+            kodi-build/**/*.apk
           if-no-files-found: error
 
       - name: Upload configure/build logs

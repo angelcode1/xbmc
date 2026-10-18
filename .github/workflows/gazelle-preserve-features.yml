@@ -37,8 +37,13 @@ jobs:
           test -f xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
           test -f xbmc/settings/MediaSourceSettings.cpp
           test -f tools/depends/target/udfread/002-primary-first-metadata.patch
-          test -f tools/android/packaging/gazelle/prepare_optical_addons.py
-          test -f tools/android/packaging/gazelle/verify_optical_apk.py
+          test -f addons/plugin.video.gazelle.kerneludf/addon.xml
+          test -f addons/plugin.video.gazelle.kerneludf/default.py
+          test -f tools/android/packaging/gazelle/stage_kernel_addon.py
+          test -f tools/android/packaging/gazelle/verify_kernel_apk.py
+          test ! -f tools/android/packaging/gazelle/prepare_optical_addons.py
+          test ! -f tools/android/packaging/gazelle/verify_optical_apk.py
+          grep -Fq GAZELLE_KERNEL_UDF_FILESMODE xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
           echo "GAZELLE_AACS_SOURCE_PRESERVED_PASS"
 
           # Dolby Vision P7 and native OMX analysis/configuration.
@@ -51,11 +56,10 @@ jobs:
           test -f docs/gazelle-fel-stagefright-profile-handoff-2026-10-14.md
           echo "GAZELLE_FEL_SOURCE_PRESERVED_PASS"
 
-          # The unified workflow may only create a public routing core.
-          # The one installable APK needs the private cube3 optical stage.
+          # The Kodi APK must package the kernel UDF addon from this repository.
           workflow=.github/workflows/android-firetv-bluray.yml
           test -f "$workflow"
           grep -Fq 'android-firetv-unified' "$workflow"
-          grep -Fq 'GAZELLE_PUBLIC_ROUTING_CORE_ONLY' "$workflow"
+          grep -Fq 'stage_kernel_addon.py' "$workflow"
           echo "GAZELLE_COMBINED_BUILD_CONTRACT_PRESERVED_PASS"
           echo "GAZELLE_SYNC_PRESERVATION_GATE_PASS aacs=1 fel=1 build=1"

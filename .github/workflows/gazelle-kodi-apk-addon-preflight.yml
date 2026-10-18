@@ -1,41 +1,40 @@
-name: Gazelle Kodi APK Packaging Source Gate
+name: Gazelle Kernel UDF APK Source Gate
 
 on:
   push:
     branches:
-      - android-firetv-fel
+      - android-firetv-unified
+      - feature/gazelle-kernel-udf-disc-tiles-20261017
     paths:
       - .github/workflows/gazelle-kodi-apk-addon-preflight.yml
-      - tools/android/packaging/gazelle/**
       - .github/workflows/android-firetv-bluray.yml
+      - tools/android/packaging/gazelle/**
+      - addons/plugin.video.gazelle.kerneludf/**
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  nonsecret-packaging-source:
+  kernel-addon-source:
     runs-on: ubuntu-24.04
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Verify staging and APK integrity checkers compile
+      - name: Stage and inspect the kernel UDF addon offline
         run: |
           set -euo pipefail
-          python3 -m py_compile \
-            tools/android/packaging/gazelle/prepare_optical_addons.py \
-            tools/android/packaging/gazelle/verify_optical_apk.py
+          python3 -m py_compile tools/android/packaging/gazelle/stage_kernel_addon.py tools/android/packaging/gazelle/verify_kernel_apk.py addons/plugin.video.gazelle.kerneludf/default.py
+          python3 tools/android/packaging/gazelle/stage_kernel_addon.py --root "$GITHUB_WORKSPACE" --depends-prefix "$RUNNER_TEMP/staged"
           python3 - <<'PY'
-          from pathlib import Path
-          wf=Path(".github/workflows/android-firetv-bluray.yml").read_text()
-          for name in ("Checkout pinned cube3 optical Kodi addon sources",
-                       "Compile and embed ARMv7 Gazelle optical Kodi addons",
-                       "Verify Gazelle addons actually exist inside APK"):
-              assert name in wf, name
-          assert "workflow_call:" in wf
-          assert wf.count("github.repository == 'angelcode1/cube3'") == 3
-          assert "CUBE3_READ_TOKEN" not in wf
-          print("GAZELLE_PUBLIC_KODI_OPTICAL_PACKAGING_SOURCE_PASS")
+          import os, pathlib, zipfile
+          stage = pathlib.Path(os.environ['RUNNER_TEMP']) / 'staged/share/kodi/addons/plugin.video.gazelle.kerneludf'
+          with zipfile.ZipFile('/tmp/gazelle-kernel-test.apk', 'w') as archive:
+              for src in stage.iterdir():
+                  archive.write(src, 'assets/addons/plugin.video.gazelle.kerneludf/' + src.name)
           PY
+          python3 tools/android/packaging/gazelle/verify_kernel_apk.py /tmp/gazelle-kernel-test.apk
+          ! grep -Eiq 'angelcode1/cube3|CUBE3_READ_TOKEN|gazelle-cube3-optical' .github/workflows/android-firetv-bluray.yml
+          echo GAZELLE_SELF_CONTAINED_KERNEL_ADDON_PASS

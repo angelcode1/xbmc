@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<addon id="plugin.video.gazelle.kerneludf" name="Kernel UDF Optical Disc" version="0.1.0" provider-name="Gazelle Kodi">
+  <requires><import addon="xbmc.python" version="3.0.0"/></requires>
+  <extension point="xbmc.python.pluginsource" library="default.py"><provides>video</provides></extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="en_GB">Browse a kernel-mounted optical disc</summary>
+    <description lang="en_GB">Navigation for a read-only UDF mount. Does not mount a device, read raw sectors or start root services.</description>
+    <platform>android</platform><license>MIT</license>
+  </extension>
+</addon>

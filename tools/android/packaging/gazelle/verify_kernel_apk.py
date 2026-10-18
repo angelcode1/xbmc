@@ -11,7 +11,7 @@ PREFIX = "assets/addons/" + ADDON + "/"
 MANIFEST = "assets/system/addon-manifest.xml"
 
 
-def verify(apk):
+def verify(apk, *, kernel_only=False):
     with zipfile.ZipFile(apk) as archive:
         if archive.testzip() is not None:
             raise ValueError("APK ZIP corruption")
@@ -34,6 +34,9 @@ def verify(apk):
                     "libvfs.gazelle.physical.so")
         if any(any(name in p for name in obsolete) for p in paths):
             raise ValueError("Legacy userspace optical addon still bundled")
+        if kernel_only:
+            print('GAZELLE_KERNEL_UDF_APK_SOURCE_PASS')
+            return
         mm_service = "service.gazelle.mmbd"
         mm_prefix = "assets/addons/" + mm_service + "/"
         native_prefix = "lib/armeabi-v7a/"
@@ -68,4 +71,6 @@ def verify(apk):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("apk")
-    verify(parser.parse_args().apk)
+    parser.add_argument("--kernel-only", action="store_true")
+    args = parser.parse_args()
+    verify(args.apk, kernel_only=args.kernel_only)

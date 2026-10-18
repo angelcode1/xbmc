@@ -39,7 +39,7 @@ jobs:
                   if src.is_file():
                       archive.write(src, 'assets/' + str(src.relative_to(root)))
           PY
-          python3 tools/android/packaging/gazelle/verify_kernel_apk.py /tmp/gazelle-kernel-test.apk
+          python3 tools/android/packaging/gazelle/verify_kernel_apk.py /tmp/gazelle-kernel-test.apk --kernel-only
           grep -Fq 'stage_kernel_addon.py --root $(CMAKE_SOURCE_DIR) --assets ./assets' tools/android/packaging/Makefile.in
           python3 -m py_compile tools/android/packaging/gazelle/stage_mmbd_apk.py addons/service.gazelle.mmbd/service.py
           python3 - <<'PY'

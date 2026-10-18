@@ -41,6 +41,16 @@ jobs:
           PY
           python3 tools/android/packaging/gazelle/verify_kernel_apk.py /tmp/gazelle-kernel-test.apk
           grep -Fq 'stage_kernel_addon.py --root $(CMAKE_SOURCE_DIR) --assets ./assets' tools/android/packaging/Makefile.in
+          python3 -m py_compile tools/android/packaging/gazelle/stage_mmbd_apk.py addons/service.gazelle.mmbd/service.py
+          python3 - <<'PY'
+          import hashlib, pathlib
+          root = pathlib.Path("tools/android/packaging/gazelle/native")
+          lib = root / "libmmbd.so"
+          assert lib.is_file() and hashlib.sha256(lib.read_bytes()).hexdigest() == "826b5e6dfebfd628c1a6f851a22cb583fa831978600f4ddc2663af46794a8d0b"
+          assert (root / "gazelle_mmbd_helper_v2.c").is_file()
+          assert pathlib.Path("addons/service.gazelle.mmbd/service.py").is_file()
+          print("GAZELLE_MMBD_SOURCE_LOCAL_PASS")
+          PY
           sh -n tools/android/packaging/gazelle/kodi-uid-provision.sh
           bash -n tools/android/packaging/gazelle/kodi-clean-install-macos.sh
           sh tools/android/packaging/gazelle/kodi-uid-provision.sh --selftest

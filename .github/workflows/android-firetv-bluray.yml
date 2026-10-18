@@ -20,6 +20,7 @@ on:
       - "tools/depends/**"
       - "tools/android/packaging/**"
       - "addons/plugin.video.gazelle.kerneludf/**"
+      - "addons/service.gazelle.mmbd/**"
       - "xbmc/**"
       - "docs/firetv-android-bluray-notes.md"
 
@@ -78,6 +79,9 @@ jobs:
           grep -Fq GAZELLE_KERNEL_UDF_FILESMODE xbmc/cores/VideoPlayer/DVDInputStreams/DVDInputStreamBluray.cpp
           test -f addons/plugin.video.gazelle.kerneludf/addon.xml
           test -f tools/android/packaging/gazelle/stage_kernel_addon.py
+          test -f tools/android/packaging/gazelle/stage_mmbd_apk.py
+          test -f addons/service.gazelle.mmbd/service.py
+          test -f tools/android/packaging/gazelle/native/libmmbd.so
           echo GAZELLE_KERNEL_UDF_SOURCE_PASS
 
       - name: Set up Java 17
@@ -270,7 +274,7 @@ jobs:
           make -C "$BUILD_DIR" apk
           find "$GITHUB_WORKSPACE" -iname '*.apk' -print -exec ls -lh {} \;
 
-      - name: Verify kernel UDF addon and absence of legacy VFS
+      - name: Verify kernel UDF and MMBD native service packaging
         if: env.BUILD_MODE == 'full-apk'
         shell: bash
         run: |

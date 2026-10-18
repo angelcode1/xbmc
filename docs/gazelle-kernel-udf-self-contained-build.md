@@ -1,9 +1,13 @@
 # Self-contained kernel-UDF Kodi APK
 
 The Android workflow checks out only the triggering `angelcode1/xbmc`
-revision. The kernel UDF navigation add-on is sourced from this repository
-and staged through Kodi's Android addon packaging prefix. No private
-repository checkout or private artifact download is required.
+revision. Kernel-UDF and MMBD service addons, the ARMv7 Android LibMMBD
+binary, and the native helper source are **all committed locally**.
+The Android Makefile compiles the PIE helper from local C source with
+the configured NDK, stages both libraries under `lib/armeabi-v7a/`,
+injects its exact SHA-256 into the bundled startup service, and checks
+the final APK's service and native library hashes. No private checkout,
+token, source repository, or artifact download is used for these items.
 
 The kernel itself must already expose a **read-only** UDF mount from
 `/dev/block/sr0` at
@@ -15,9 +19,10 @@ Kodi's native media-source tiles and `bd_open_files()` routing are retained.
 Old userspace `vfs.gazelle.physical` and
 `script.gazelle.physicaludfcheck` are no longer bundled.
 
-**Runtime boundary:** The APK does not distribute proprietary MakeMKV
-binaries, device-specific kernel modules, privileged MMBD brokers,
-registration files, keys, or private media. Existing libbluray AACS source
+**Runtime boundary:** The APK does not distribute the proprietary Linux MakeMKV runtime,
+device-specific kernel modules, privileged MMBD brokers, registration
+files, keys, or private media. It does distribute the standalone
+open-source Android LibMMBD v1.8.0 binary and separately compiled helper. Existing libbluray AACS source
 changes remain, but protected-disc playback requires the separately
 installed qualified MMBD runtime. CI pass does not qualify the new source
 APK on a Cube; preserve the currently working signed APK for rollback.
@@ -76,3 +81,22 @@ The standalone APK does not bundle the separate LibMMBD native library,
 its trusted helper, the MMBD startup service, or private MakeMKV runtime.
 Until these are provisioned and qualified, clean-install testing covers Kodi
 startup, local media, source tiles and addon safety—not AACS playback.
+
+## MMBD native provenance and packaging
+
+- Android `libmmbd.so` exact SHA-256: `826b5e6dfebfd628c1a6f851a22cb583fa831978600f4ddc2663af46794a8d0b`.
+- Android PIE `libgazelle_mmbd_v2.so` compiled from the independently
+  stored C source in this repository. The build SHA changes with compiler
+  version, so the build stages and pins its SHA in the Kodi startup service.
+- The startup service is optional and validates ownership, trusted native
+  origin and matching SHA-256 before it configures `LIBAACS_PATH`,
+  `LIBBDPLUS_PATH` and `MAKEMKVCON`; it does not start a root broker.
+- The APK alone cannot mount UDF or launch the Linux ARMhf MakeMKV
+  environment. These stay in the independently built Magisk backend.
+- Reusing the MakeMKV OSS LibMMBD under its applicable LGPL obligations
+  requires retaining corresponding-source and license information.
+  Do not confuse this freely redistributable LibMMBD component with
+  proprietary, private MakeMKV binaries or license state.
+- The previously working rooted-Cube helper checksum was
+  `c8005d1b168f42024f72de78ae64dcf66f4b142583d3afc92fd97ac72ce9172c`. A recompiled helper is not automatically equivalent;
+  on-device authentication and protected-disc playback are not certified.

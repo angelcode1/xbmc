@@ -30,4 +30,8 @@ protected:
   ESCALINGMETHOD m_scalingMethodGui = VS_SCALINGMETHOD_AUTO;
   std::unique_ptr<CConvolutionShader> m_scalerShader = nullptr;
   bool m_bUseHQScaler = false;
+  // HQ scaled picture of the last render, copied instead of scaling the same picture again
+  CD3DTexture m_scaledCache;
+  // stereo corrected destination of the picture in m_scaledCache
+  CRect m_scaledCacheRect;
 };

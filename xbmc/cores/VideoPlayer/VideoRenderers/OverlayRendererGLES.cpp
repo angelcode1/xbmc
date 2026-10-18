@@ -306,9 +306,9 @@ COverlayGlyphGLES::COverlayGlyphGLES(ASS_Image* images, float width, float heigh
   float scale_x = 1.0f / width;
   float scale_y = 1.0f / height;
 
-  m_vertex.resize(quads.quad.size() * 4);
+  std::vector<VERTEX> quadVertices(quads.quad.size() * 4);
 
-  VERTEX* vt = m_vertex.data();
+  VERTEX* vt = quadVertices.data();
   SQuad* vs = quads.quad.data();
 
   for (size_t i = 0; i < quads.quad.size(); i++)
@@ -353,34 +353,38 @@ COverlayGlyphGLES::COverlayGlyphGLES(ASS_Image* images, float width, float heigh
 
   glBindTexture(GL_TEXTURE_2D, 0);
 
-  // Expand quads to triangles and upload to VBO once
-  std::vector<VERTEX> vecVertices(6 * m_vertex.size() / 4);
-  VERTEX* vertices = vecVertices.data();
-
-  for (size_t i = 0; i < m_vertex.size(); i += 4)
+  // gles_shader_simple.vert reads texture coordinates as texel units offset by half a texel and
+  // scales them by m_cordStep: cord = (attr - 0.5) * cordStep. Render() sets cordStep to 1, so
+  // bias the normalised coordinates here to come back out unchanged.
+  for (VERTEX& v : quadVertices)
   {
-    *vertices++ = m_vertex[i];
-    *vertices++ = m_vertex[i + 1];
-    *vertices++ = m_vertex[i + 2];
-
-    *vertices++ = m_vertex[i + 1];
-    *vertices++ = m_vertex[i + 3];
-    *vertices++ = m_vertex[i + 2];
+    v.u += 0.5f;
+    v.v += 0.5f;
   }
 
-  glGenBuffers(1, &m_VBO);
-  glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(VERTEX) * vecVertices.size(), vecVertices.data(),
-               GL_STATIC_DRAW);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  // Expand quads to triangles and upload once: glyph vertices never change after construction.
+  std::vector<VERTEX> vecVertices(6 * quadVertices.size() / 4);
+  VERTEX* vertices = vecVertices.data();
 
-  m_vertexCount = vecVertices.size();
+  for (size_t i = 0; i < quadVertices.size(); i += 4)
+  {
+    *vertices++ = quadVertices[i];
+    *vertices++ = quadVertices[i + 1];
+    *vertices++ = quadVertices[i + 2];
+
+    *vertices++ = quadVertices[i + 1];
+    *vertices++ = quadVertices[i + 3];
+    *vertices++ = quadVertices[i + 2];
+  }
+
+  m_VBO.SetData(vecVertices.data(), vecVertices.size(), GL_STATIC_DRAW);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  m_vertexCount = static_cast<GLsizei>(vecVertices.size());
 }
 
 COverlayGlyphGLES::~COverlayGlyphGLES()
 {
   glDeleteTextures(1, &m_texture);
-  glDeleteBuffers(1, &m_VBO);
 }
 
 void COverlayGlyphGLES::Render(SRenderState& state)
@@ -413,18 +417,20 @@ void COverlayGlyphGLES::Render(SRenderState& state)
   GLint depthLoc = renderSystem->GUIShaderGetDepth();
   GLint matrixUniformLoc = renderSystem->GUIShaderGetMatrix();
 
+  glUniform4f(renderSystem->GUIShaderGetCoordStep(), 1.0f, 1.0f, 1.0f, 1.0f);
+
   CMatrixGL matrix = glMatrixProject.Get();
   matrix.MultMatrixf(glMatrixModview.Get());
   glUniformMatrix4fv(matrixUniformLoc, 1, GL_FALSE, matrix);
 
-  glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
+  m_VBO.Bind();
 
   glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, sizeof(VERTEX),
-                        reinterpret_cast<const GLvoid*>(offsetof(VERTEX, x)));
+                        reinterpret_cast<GLvoid*>(offsetof(VERTEX, x)));
   glVertexAttribPointer(colLoc, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(VERTEX),
-                        reinterpret_cast<const GLvoid*>(offsetof(VERTEX, r)));
+                        reinterpret_cast<GLvoid*>(offsetof(VERTEX, r)));
   glVertexAttribPointer(tex0Loc, 2, GL_FLOAT, GL_FALSE, sizeof(VERTEX),
-                        reinterpret_cast<const GLvoid*>(offsetof(VERTEX, u)));
+                        reinterpret_cast<GLvoid*>(offsetof(VERTEX, u)));
 
   glEnableVertexAttribArray(posLoc);
   glEnableVertexAttribArray(colLoc);
@@ -493,8 +499,6 @@ void COverlayTextureGLES::Render(SRenderState& state)
   CRenderSystemGLES* renderSystem =
       dynamic_cast<CRenderSystemGLES*>(CServiceBroker::GetRenderSystem());
   renderSystem->EnableGUIShader(ShaderMethodGLES::SM_TEXTURE_NOBLEND);
-  GLint posLoc = renderSystem->GUIShaderGetPos();
-  GLint tex0Loc = renderSystem->GUIShaderGetCoord0();
   GLint depthLoc = renderSystem->GUIShaderGetDepth();
 
   // Tell the shader this texture is premultiplied so its limited-range
@@ -506,33 +510,11 @@ void COverlayTextureGLES::Render(SRenderState& state)
   if (m_pma)
     glUniform1f(renderSystem->GUIShaderGetPma(), 1.0f);
 
-  GLfloat ver[4][2];
-  GLfloat tex[4][2];
-  GLubyte idx[4] = {0, 1, 3, 2}; //determines order of triangle strip
-
-  glVertexAttribPointer(posLoc, 2, GL_FLOAT, 0, 0, ver);
-  glVertexAttribPointer(tex0Loc, 2, GL_FLOAT, 0, 0, tex);
-
-  glEnableVertexAttribArray(posLoc);
-  glEnableVertexAttribArray(tex0Loc);
-
   glUniform1f(depthLoc, 1.0f);
-  // Setup vertex position values
-  ver[0][0] = ver[3][0] = rd.x1;
-  ver[0][1] = ver[1][1] = rd.y1;
-  ver[1][0] = ver[2][0] = rd.x2;
-  ver[2][1] = ver[3][1] = rd.y2;
 
-  // Setup texture coordinates
-  tex[0][0] = tex[0][1] = tex[1][1] = tex[3][0] = 0.0f;
-  tex[1][0] = tex[2][0] = m_u;
-  tex[2][1] = tex[3][1] = m_v;
-
-  glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_BYTE, idx);
+  const CRect texCoords(0.0f, 0.0f, m_u, m_v);
+  renderSystem->DrawGUIQuad(rd, &texCoords);
   CRenderSystemBase::m_GUIElementCount++;
-
-  glDisableVertexAttribArray(posLoc);
-  glDisableVertexAttribArray(tex0Loc);
 
   renderSystem->DisableGUIShader();
 

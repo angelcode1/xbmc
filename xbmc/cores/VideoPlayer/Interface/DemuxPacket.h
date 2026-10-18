@@ -45,6 +45,9 @@ extern "C"
 
     //! @brief PTS offset correction applied to the PTS and DTS.
     double m_ptsOffsetCorrection{0};
+
+    //! @brief Packet is a keyframe, only set by demuxers that know it.
+    bool m_keyFrame{false};
     //! @brief Packet belongs to a Dolby Vision dual-layer stream.
     bool isDualStream{false};
     //! @brief Packet carries the Dolby Vision enhancement layer.

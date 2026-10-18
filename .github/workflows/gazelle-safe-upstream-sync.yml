@@ -1,0 +1,102 @@
+name: Gazelle - propose safe Kodi upstream sync
+
+# Sync Kodi upstream master into the fork's master through a reviewable PR.
+# No reset, force-push, push to master, or automatic merge is performed.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: gazelle-safe-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  propose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout the fork default branch with merge history
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: true
+
+      - name: Fetch original Kodi history and prepare merge branch
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add kodi-upstream https://github.com/xbmc/xbmc.git
+          git fetch --no-tags kodi-upstream +refs/heads/master:refs/remotes/kodi-upstream/master
+          git fetch --no-tags origin +refs/heads/master:refs/remotes/origin/master
+
+          old="$(git rev-parse refs/remotes/origin/master)"
+          upstream="$(git rev-parse refs/remotes/kodi-upstream/master)"
+          echo "fork_master=$old" >> "$GITHUB_OUTPUT"
+          echo "upstream_master=$upstream" >> "$GITHUB_OUTPUT"
+
+          if git merge-base --is-ancestor "$upstream" "$old"; then
+            echo "needs_sync=false" >> "$GITHUB_OUTPUT"
+            echo "Kodi upstream is already contained in fork master." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          branch="sync/kodi-upstream-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          git switch -c "$branch" "$old"
+
+          # A real two-parent merge. Conflicts must be resolved by a human;
+          # never silently select upstream 'theirs' over local patches.
+          if ! git merge --no-ff --no-edit "$upstream"; then
+            echo "::error::Upstream merge conflicts; no GitHub branch was changed."
+            git diff --name-only --diff-filter=U | tee /tmp/kodi-conflicts.txt
+            {
+              echo "## Kodi upstream merge requires review"
+              echo "Fork base: \`$old\`"
+              echo "Upstream: \`$upstream\`"
+              echo "No branch was pushed. Conflicting files:"
+              sed 's/^/- /' /tmp/kodi-conflicts.txt
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+          git merge-base --is-ancestor "$old" HEAD
+          git merge-base --is-ancestor "$upstream" HEAD
+
+          # Push to a unique NEW staging ref, never to master or a live dev ref.
+          git push --no-verify origin "HEAD:refs/heads/$branch"
+          echo "needs_sync=true" >> "$GITHUB_OUTPUT"
+          echo "Proposed merge branch: \`$branch\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open upstream sync PR for review (never auto-merge)
+        if: steps.prepare.outputs.needs_sync == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_BRANCH: ${{ steps.prepare.outputs.branch }}
+          OLD_MASTER: ${{ steps.prepare.outputs.fork_master }}
+          NEW_UPSTREAM: ${{ steps.prepare.outputs.upstream_master }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base master \
+            --head "$SYNC_BRANCH" \
+            --title "Sync Kodi upstream master into fork (preserve Git history)" \
+            --body "Merge Kodi upstream \`$NEW_UPSTREAM\` into fork master \`$OLD_MASTER\` with a normal two-parent merge. This workflow never force-pushes, resets, squashes, or overwrites development branches. Review upstream changes before merging. After merging into master, use the Gazelle forward-sync proposal to merge master into android-firetv-unified, retaining the Blu-ray/AACS and DV FEL history."; then
+            echo "GAZELLE_UPSTREAM_SYNC_PR_CREATED=1" >> "$GITHUB_STEP_SUMMARY"
+          else
+            link="https://github.com/$GITHUB_REPOSITORY/compare/master...$SYNC_BRANCH?expand=1"
+            echo "::warning::GitHub Actions cannot create PRs in this repository. The staging branch is preserved. Open the manual comparison URL."
+            echo "GAZELLE_UPSTREAM_SYNC_PR_MANUAL_URL=$link" >> "$GITHUB_STEP_SUMMARY"
+          fi

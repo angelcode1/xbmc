@@ -22,9 +22,9 @@
 #include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "cores/VideoPlayer/VideoRenderers/RenderManager.h"
 #include "guilib/DispResource.h"
+#include "language/LanguageTag.h"
 #include "threads/SystemClock.h"
 #include "threads/Thread.h"
-#include "utils/LanguageTag.h"
 
 #include <atomic>
 #include <chrono>
@@ -131,6 +131,7 @@ public:
   void* stream; // pointer or integer, identifying stream playing. if it changes stream changed
   int changes; // remembered counter from stream to track codec changes
   bool inited;
+  bool demuxDisabled; // disabled in the demuxer since it was opened
   unsigned int packets;
   IDVDStreamPlayer::ESyncState syncState;
   double starttime;
@@ -169,6 +170,7 @@ public:
     stream = NULL;
     changes = 0;
     inited = false;
+    demuxDisabled = false;
     packets = 0;
     syncState = IDVDStreamPlayer::SYNC_STARTING;
     starttime = DVD_NOPTS_VALUE;
@@ -197,7 +199,7 @@ struct SelectionStream
   int type_index = 0;
   std::string filename;
   std::string filename2;  // for vobsub subtitles, 2 files are necessary (idx/sub)
-  KODI::UTILS::CLanguageTag language;
+  KODI::LANGUAGE::CLanguageTag language;
   std::string name;
   StreamFlags flags = StreamFlags::FLAG_NONE;
   int source = 0;
@@ -220,6 +222,11 @@ struct SelectionStream
   AVDOVIDecoderConfigurationRecord dovi{};
   uint32_t fpsScale{0};
   uint32_t fpsRate{0};
+
+  bool IsCurrent(const CCurrentStream& current) const
+  {
+    return demuxerId == current.demuxerId && id == current.id && source == current.source;
+  }
 };
 
 class CSelectionStreams
@@ -418,6 +425,7 @@ protected:
   void DestroyPlayers();
 
   void Prepare();
+  void ForgetSubtitleSelection();
   bool ShouldDeferSync(bool ready, std::chrono::steady_clock::time_point now);
   bool OpenStream(CCurrentStream& current, int64_t demuxerId, int iStream, int source, bool reset = true);
   bool OpenAudioStream(CDVDStreamInfo& hint, bool reset = true);
@@ -557,6 +565,17 @@ protected:
   void ExecuteTimeSeek(int64_t target, Direction direction, bool accurate);
   bool EvaluateIsStreaming() const;
 
+  struct SpeedChangeNotifications
+  {
+    bool resumed{false};
+    bool speedChanged{false};
+  };
+  // Callbacks to raise for a PLAYER_SETSPEED transition. Unpausing to normal or tempo
+  // speed is excluded because SetSpeed() already raises OnPlayBackResumed.
+  static SpeedChangeNotifications GetSpeedChangeNotifications(int previousSpeed,
+                                                              int newSpeed,
+                                                              bool isTempo);
+
   bool m_players_created;
 
   CFileItem m_item;
@@ -588,6 +607,9 @@ protected:
     int m_videoIndex{-1};
     int m_audioIndex{-1};
     int m_subtitleIndex{-1};
+    //! Last subtitle index that resolved to an open stream. A hidden subtitle is
+    //! closed on the demuxer but stays selected, so this outlives the stream.
+    int m_selectedSubtitleIndex{-1};
   } m_content;
 
   int m_playSpeed;
@@ -598,7 +620,6 @@ protected:
     double lastpts{0.0}; // holds last display pts during ff/rw operations
     int64_t lasttime{0};
     double lastseekpts{0.0};
-    double lastabstime{0.0};
 
     void Reset(double pts)
     {

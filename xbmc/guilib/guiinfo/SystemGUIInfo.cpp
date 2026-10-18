@@ -37,6 +37,7 @@
 #include "storage/discs/IDiscDriveHandler.h"
 #include "utils/AlarmClock.h"
 #include "utils/CPUInfo.h"
+#include "utils/DefaultArt.h"
 #include "utils/GpuInfo.h"
 #include "utils/HDRCapabilities.h"
 #include "utils/MemUtils.h"
@@ -251,7 +252,7 @@ bool CSystemGUIInfo::GetLabel(std::string& value,
       return true;
 #ifdef HAS_OPTICAL_DRIVE
     case SYSTEM_DVD_LABEL:
-      value = CServiceBroker::GetMediaManager().GetDiskLabel();
+      value = CServiceBroker::GetMediaManager().GetDiskLabel("", true);
       return true;
 #endif
     case SYSTEM_ALARM_POS:
@@ -297,7 +298,7 @@ bool CSystemGUIInfo::GetLabel(std::string& value,
                                      ->GetProfileManager()
                                      ->GetCurrentProfile()
                                      .getThumb();
-      value = thumb.empty() ? "DefaultUser.png" : thumb;
+      value = thumb.empty() ? KODI::ART::DEFAULT::USER : thumb;
       return true;
     }
     case SYSTEM_LANGUAGE:
@@ -511,7 +512,7 @@ bool CSystemGUIInfo::GetBool(bool& value,
       if (CServiceBroker::GetMediaManager().IsDiscInDrive())
       {
         const std::shared_ptr<MEDIA_DETECT::CCdInfo> pCdInfo{
-            CServiceBroker::GetMediaManager().GetCdInfo("", true)};
+            CServiceBroker::GetMediaManager().GetCdInfo("", true, true)};
         value =
             pCdInfo && (pCdInfo->IsAudio(1) || pCdInfo->IsCDExtra(1) || pCdInfo->IsMixedMode(1));
       }

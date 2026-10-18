@@ -67,8 +67,33 @@ public:
   }
   bool InvokeEvaluateIsStreaming() const { return EvaluateIsStreaming(); }
 
+  static CVideoPlayer::SpeedChangeNotifications InvokeGetSpeedChangeNotifications(int previousSpeed,
+                                                                                  int newSpeed,
+                                                                                  bool isTempo)
+  {
+    return GetSpeedChangeNotifications(previousSpeed, newSpeed, isTempo);
+  }
+
   void SetCurrentVideoId(int id) { m_CurrentVideo.id = id; }
   void SetCurrentAudioId(int id) { m_CurrentAudio.id = id; }
+
+  void AddSubtitleStream(int typeIndex, int id, int source)
+  {
+    SelectionStream s;
+    s.type = StreamType::SUBTITLE;
+    s.type_index = typeIndex;
+    s.id = id;
+    s.source = source;
+    m_SelectionStreams.m_Streams.emplace_back(s);
+  }
+  void SetCurrentSubtitle(int id, int source)
+  {
+    m_CurrentSubtitle.id = id;
+    m_CurrentSubtitle.source = source;
+    m_CurrentSubtitle.demuxerId = -1;
+  }
+  void InvokeUpdateContentState() { UpdateContentState(); }
+  void InvokeForgetSubtitleSelection() { ForgetSubtitleSelection(); }
   void SetHasVideo(bool hasVideo) { m_HasVideo = hasVideo; }
   void SetHasAudio(bool hasAudio) { m_HasAudio = hasAudio; }
   bool GetHasVideo() const { return m_HasVideo; }
@@ -240,6 +265,45 @@ TEST_F(TestVideoPlayer, UpdateHasVideoAudioKeepsFlagsWhenStreamsOpen)
 
   EXPECT_TRUE(player.GetHasVideo());
   EXPECT_TRUE(player.GetHasAudio());
+}
+
+TEST_F(TestVideoPlayer, SubtitleSelectionSurvivesTheStreamBeingClosed)
+{
+  // Hiding a bitmap subtitle closes its stream while it stays the selected one;
+  // recomputing indices on the next open must not drop that selection.
+  CTestPlayerCallback playercallback;
+  CTestVideoPlayer player(playercallback);
+
+  player.AddSubtitleStream(0, 7, STREAM_SOURCE_DEMUX);
+  player.AddSubtitleStream(1, 8, STREAM_SOURCE_DEMUX);
+
+  player.SetCurrentSubtitle(8, STREAM_SOURCE_DEMUX);
+  player.InvokeUpdateContentState();
+  ASSERT_EQ(1, player.GetSubtitle());
+
+  player.SetCurrentSubtitle(-1, STREAM_SOURCE_NONE);
+  player.InvokeUpdateContentState();
+
+  EXPECT_EQ(1, player.GetSubtitle());
+}
+
+TEST_F(TestVideoPlayer, SubtitleSelectionDoesNotLeakIntoTheNextPlayback)
+{
+  CTestPlayerCallback playercallback;
+  CTestVideoPlayer player(playercallback);
+
+  player.AddSubtitleStream(0, 7, STREAM_SOURCE_DEMUX);
+  player.SetCurrentSubtitle(7, STREAM_SOURCE_DEMUX);
+  player.InvokeUpdateContentState();
+  ASSERT_EQ(0, player.GetSubtitle());
+
+  // a new item, whether in a new player or opened in place, has no subtitle open when its first
+  // stream opens; the previous item's selection must not be reported against it
+  player.InvokeForgetSubtitleSelection();
+  player.SetCurrentSubtitle(-1, STREAM_SOURCE_NONE);
+  player.InvokeUpdateContentState();
+
+  EXPECT_EQ(-1, player.GetSubtitle());
 }
 
 TEST_F(TestVideoPlayer, CalcTimeOrPercentSeekTargetCompat)
@@ -593,4 +657,68 @@ TEST_F(TestVideoPlayer, IsStreamingDemuxerReturnsTrue)
 
   player.SetDemuxer(std::make_unique<CTestDemux>(true));
   EXPECT_TRUE(player.InvokeEvaluateIsStreaming());
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_ResumeToNormalFromPause)
+{
+  const auto notifications = CTestVideoPlayer::InvokeGetSpeedChangeNotifications(
+      DVD_PLAYSPEED_PAUSE, DVD_PLAYSPEED_NORMAL, false);
+  EXPECT_FALSE(notifications.resumed);
+  EXPECT_FALSE(notifications.speedChanged);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_ResumeToTempoFromPause)
+{
+  const auto notifications =
+      CTestVideoPlayer::InvokeGetSpeedChangeNotifications(DVD_PLAYSPEED_PAUSE, 1200, true);
+  EXPECT_FALSE(notifications.resumed);
+  EXPECT_FALSE(notifications.speedChanged);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_FFFromPause)
+{
+  const auto notifications = CTestVideoPlayer::InvokeGetSpeedChangeNotifications(
+      DVD_PLAYSPEED_PAUSE, 2 * DVD_PLAYSPEED_NORMAL, false);
+  EXPECT_TRUE(notifications.resumed);
+  EXPECT_TRUE(notifications.speedChanged);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_RWFromPause)
+{
+  const auto notifications = CTestVideoPlayer::InvokeGetSpeedChangeNotifications(
+      DVD_PLAYSPEED_PAUSE, -2 * DVD_PLAYSPEED_NORMAL, false);
+  EXPECT_TRUE(notifications.resumed);
+  EXPECT_TRUE(notifications.speedChanged);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_SpeedChangeWhilePlaying)
+{
+  const auto notifications = CTestVideoPlayer::InvokeGetSpeedChangeNotifications(
+      2 * DVD_PLAYSPEED_NORMAL, 4 * DVD_PLAYSPEED_NORMAL, false);
+  EXPECT_FALSE(notifications.resumed);
+  EXPECT_TRUE(notifications.speedChanged);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_ReturnToNormalFromFF)
+{
+  const auto notifications = CTestVideoPlayer::InvokeGetSpeedChangeNotifications(
+      2 * DVD_PLAYSPEED_NORMAL, DVD_PLAYSPEED_NORMAL, false);
+  EXPECT_FALSE(notifications.resumed);
+  EXPECT_TRUE(notifications.speedChanged);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_PauseFromPlaying)
+{
+  const auto notifications = CTestVideoPlayer::InvokeGetSpeedChangeNotifications(
+      DVD_PLAYSPEED_NORMAL, DVD_PLAYSPEED_PAUSE, false);
+  EXPECT_FALSE(notifications.resumed);
+  EXPECT_FALSE(notifications.speedChanged);
+}
+
+TEST_F(TestVideoPlayer, GetSpeedChangeNotifications_NoActualChange)
+{
+  const auto notifications = CTestVideoPlayer::InvokeGetSpeedChangeNotifications(
+      2 * DVD_PLAYSPEED_NORMAL, 2 * DVD_PLAYSPEED_NORMAL, false);
+  EXPECT_FALSE(notifications.resumed);
+  EXPECT_FALSE(notifications.speedChanged);
 }

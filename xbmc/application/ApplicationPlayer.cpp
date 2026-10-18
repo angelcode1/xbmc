@@ -65,6 +65,14 @@ void CApplicationPlayer::ResetPlayer()
   // we need to do this directly on the member
   std::unique_lock lock(m_playerLock);
   m_pPlayer.reset();
+
+  // the cached stream indices describe the player that has just gone away
+  m_iAudioStream = -1;
+  m_iVideoStream = -1;
+  m_iSubtitleStream = -1;
+  m_audioStreamUpdate.SetExpired();
+  m_videoStreamUpdate.SetExpired();
+  m_subtitleStreamUpdate.SetExpired();
 }
 
 void CApplicationPlayer::CloseFile(bool reopen)
@@ -134,21 +142,15 @@ bool CApplicationPlayer::OpenFile(const CFileItem& item, const CPlayerOptions& o
 
       CloseFile();
       if (player->m_name != newPlayer)
-      {
-        std::unique_lock lock(m_playerLock);
-        m_pPlayer.reset();
-      }
+        ResetPlayer();
       return true;
     }
   }
   else if (player && player->m_name != newPlayer)
   {
     CloseFile();
-    {
-      std::unique_lock lock(m_playerLock);
-      m_pPlayer.reset();
-      player.reset();
-    }
+    ResetPlayer();
+    player.reset();
   }
 
   if (!player)
@@ -511,7 +513,7 @@ int CApplicationPlayer::GetAudioStream()
     return m_iAudioStream;
   }
   else
-    return 0;
+    return -1;
 }
 
 int CApplicationPlayer::GetSubtitle()
@@ -527,7 +529,7 @@ int CApplicationPlayer::GetSubtitle()
     return m_iSubtitleStream;
   }
   else
-    return 0;
+    return -1;
 }
 
 bool CApplicationPlayer::GetSubtitleVisible() const
@@ -711,7 +713,9 @@ bool CApplicationPlayer::OnPlaybackAction(const CAction& action)
       break;
   }
 
-  if (IsPaused())
+  const bool wasPaused = IsPaused();
+  // FF/RW while paused is only supported for video outside of menus
+  if (wasPaused && (!IsPlayingVideo() || IsPlayingGame() || IsInMenu()))
     return false;
 
   switch (action.GetID())
@@ -721,6 +725,8 @@ bool CApplicationPlayer::OnPlaybackAction(const CAction& action)
     {
       const bool rewind = action.GetID() == ACTION_PLAYER_REWIND;
       float playSpeed = GetPlaySpeed();
+      if (playSpeed == 0)
+        playSpeed = 1;
 
       if (rewind && playSpeed == 1) // Enables Rewinding
         playSpeed *= -2;
@@ -737,6 +743,10 @@ bool CApplicationPlayer::OnPlaybackAction(const CAction& action)
         playSpeed = 1;
 
       SetPlaySpeed(playSpeed);
+
+      CGUIComponent* gui = CServiceBroker::GetGUI();
+      if (wasPaused && gui)
+        gui->GetAudioManager().Enable(IsPaused());
       return true;
     }
 
@@ -752,19 +762,30 @@ bool CApplicationPlayer::OnPlaybackAction(const CAction& action)
       const int power = std::abs(static_cast<int>(action.GetAmount() * MAX_FFWD_SPEED + 0.5f));
       // 1 -> 2^MAX_FFWD_SPEED
       int speed = 1 << power;
+      // speed 1 would unpause
+      if (speed == 1 && wasPaused)
+        return false;
       if (speed != 1 && action.GetID() == ACTION_ANALOG_REWIND)
         speed = -speed;
       SetPlaySpeed(static_cast<float>(speed));
       if (speed == 1)
         CLog::Log(LOGDEBUG, "Resetting playspeed");
+
+      CGUIComponent* gui = CServiceBroker::GetGUI();
+      if (wasPaused && gui)
+        gui->GetAudioManager().Enable(IsPaused());
       return true;
     }
 
     case ACTION_PLAYER_INCREASE_TEMPO:
+      if (wasPaused)
+        return false;
       CPlayerUtils::AdvanceTempoStep(*this, TempoStepChange::INCREASE);
       return true;
 
     case ACTION_PLAYER_DECREASE_TEMPO:
+      if (wasPaused)
+        return false;
       CPlayerUtils::AdvanceTempoStep(*this, TempoStepChange::DECREASE);
       return true;
 
@@ -848,7 +869,7 @@ int CApplicationPlayer::GetVideoStream()
     return m_iVideoStream;
   }
   else
-    return 0;
+    return -1;
 }
 
 int CApplicationPlayer::GetVideoStreamCount() const
@@ -895,6 +916,8 @@ void CApplicationPlayer::SetSubtitleVisible(bool bVisible)
   if (player)
   {
     player->SetSubtitleVisible(bVisible);
+    // hiding a subtitle can close its stream, which changes the reported index
+    m_subtitleStreamUpdate.SetExpired();
   }
 }
 

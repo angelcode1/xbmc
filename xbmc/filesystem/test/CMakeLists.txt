@@ -1,4 +1,5 @@
-set(SOURCES TestAudioBookFileDirectory.cpp
+set(SOURCES TestAddonsPaths.cpp
+            TestAudioBookFileDirectory.cpp
             TestDirectory.cpp
             TestDirectoryCache.cpp
             TestDiscDirectoryHelper.cpp
@@ -12,10 +13,15 @@ set(SOURCES TestAudioBookFileDirectory.cpp
 
 if(TARGET ${APP_NAME_LC}::Bluray)
   list(APPEND SOURCES TestBlurayDirectory.cpp
+                      TestBlurayDiscCache.cpp
                       TestBlurayPlaylistHints.cpp
                       TestDiscDirectoryHelperProject.cpp
                       TestProjectParser.cpp
                       TestStreamParser.cpp)
+endif()
+
+if(TARGET ${APP_NAME_LC}::Udfread)
+  list(APPEND SOURCES TestUDFBlockInput.cpp)
 endif()
 
 if(TARGET ${APP_NAME_LC}::MicroHttpd)

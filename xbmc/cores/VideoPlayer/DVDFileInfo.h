@@ -32,6 +32,11 @@ public:
   */
   static bool CanExtract(const CFileItem& fileItem);
 
+  /*!
+   * @brief Is \p path close enough to decode frames from: local, or on the LAN for HTTP and FTP?
+  */
+  static bool IsExtractableLocation(const std::string& path);
+
   // Probe the files streams and store the info in the VideoInfoTag
   static bool GetFileStreamDetails(CFileItem* pItem);
 
@@ -56,9 +61,10 @@ private:
   */
   static bool AddExternalSubtitleToDetails(const std::string &path, CStreamDetails &details, const std::string& filename, const std::string& subfilename = "");
 
-  /** \brief Checks external subtitles for a given item and adds any existing ones to the item stream details
+  /** \brief Checks external subtitles for a given item and adds any existing ones to the stream details
   *   \param item The video item
+  *   \param[out] details The stream details to add the subtitles to
   *   \sa AddExternalSubtitleToDetails
   */
-  static void ProcessExternalSubtitles(CFileItem* item);
+  static void ProcessExternalSubtitles(const CFileItem& item, CStreamDetails& details);
 };

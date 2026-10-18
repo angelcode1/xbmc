@@ -549,6 +549,9 @@ bool CApplication::InitWindow(RESOLUTION res)
 
 bool CApplication::Initialize()
 {
+  // Must precede anything that can dispatch a JSON-RPC call
+  CJSONRPC::Initialize();
+
   m_pActiveAE->Start();
   // restore AE's previous volume state
 
@@ -586,12 +589,14 @@ bool CApplication::Initialize()
   CDatabaseManager &databaseManager = m_ServiceManager->GetDatabaseManager();
 
   bool allDatabasesInitialized{false};
-  CEvent event(true);
+  // Shared so the jobs below keep the event alive until CEvent::Set() returns: Set() still
+  // touches the event after waking the waiter, and Initialize() may return before that.
+  auto event = std::make_shared<CEvent>(true);
   CServiceBroker::GetJobManager()->Submit(
-      [&allDatabasesInitialized, &databaseManager, &event]()
+      [&allDatabasesInitialized, &databaseManager, event]()
       {
         allDatabasesInitialized = databaseManager.Initialize();
-        event.Set();
+        event->Set();
       });
 
   const std::string& connecting{
@@ -599,7 +604,7 @@ bool CApplication::Initialize()
   const std::string& updating{
       CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(24150)};
   int iDots = 1;
-  while (!event.Wait(1000ms))
+  while (!event->Wait(1000ms))
   {
     if (databaseManager.IsConnecting() || databaseManager.IsUpgrading())
     {
@@ -636,16 +641,18 @@ bool CApplication::Initialize()
 
   // Initialize GUI font manager to build/update fonts cache
   //! @todo Move GUIFontManager into service broker and drop the global reference
-  event.Reset();
+  event->Reset();
   GUIFontManager& guiFontManager = g_fontManager;
-  CServiceBroker::GetJobManager()->Submit([&guiFontManager, &event]() {
-    guiFontManager.Initialize();
-    event.Set();
-  });
+  CServiceBroker::GetJobManager()->Submit(
+      [&guiFontManager, event]()
+      {
+        guiFontManager.Initialize();
+        event->Set();
+      });
 
   std::string localizedStr{CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(39175)};
   iDots = 1;
-  while (!event.Wait(1000ms))
+  while (!event->Wait(1000ms))
   {
     if (g_fontManager.IsUpdating())
       CServiceBroker::GetRenderSystem()->ShowSplash(std::string(iDots, ' ') + localizedStr +
@@ -675,7 +682,7 @@ bool CApplication::Initialize()
     skinHandling->m_confirmSkinChange = false;
 
     std::vector<AddonInfoPtr> incompatibleAddons;
-    event.Reset();
+    event->Reset();
 
     // Addon migration
     if (CServiceBroker::GetAddonMgr().GetIncompatibleEnabledAddonInfos(incompatibleAddons))
@@ -683,17 +690,18 @@ bool CApplication::Initialize()
       if (CAddonSystemSettings::GetInstance().GetAddonAutoUpdateMode() == AUTO_UPDATES_ON)
       {
         CServiceBroker::GetJobManager()->Submit(
-            [&event, &incompatibleAddons]() {
+            [event, &incompatibleAddons]()
+            {
               if (CServiceBroker::GetRepositoryUpdater().CheckForUpdates())
                 CServiceBroker::GetRepositoryUpdater().Await();
 
               incompatibleAddons = CServiceBroker::GetAddonMgr().MigrateAddons();
-              event.Set();
+              event->Set();
             },
             CJob::PRIORITY_DEDICATED);
         localizedStr = CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(24151);
         iDots = 1;
-        while (!event.Wait(1000ms))
+        while (!event->Wait(1000ms))
         {
           CServiceBroker::GetRenderSystem()->ShowSplash(std::string(iDots, ' ') + localizedStr +
                                                         std::string(iDots, '.'));
@@ -743,10 +751,6 @@ bool CApplication::Initialize()
     // rendered while we load the main window or enter the master lock key
     CServiceBroker::GetGUI()->GetWindowManager().ActivateWindow(WINDOW_SPLASH);
   }
-
-  // Must stay above the window activation below: that can raise a modal dialog, whose nested
-  // render loop reaches anything after it only once the dialog has been dismissed.
-  CJSONRPC::Initialize();
 
   CServiceBroker::RegisterSpeechRecognition(speech::ISpeechRecognition::CreateInstance());
 
@@ -1150,7 +1154,7 @@ bool CApplication::OnAction(const CAction &action)
       {
         db.SetVideoUserRating(m_itemCurrentFile->GetVideoInfoTag()->m_iDbId,
                               m_itemCurrentFile->GetVideoInfoTag()->m_iUserRating,
-                              m_itemCurrentFile->GetVideoInfoTag()->m_type);
+                              m_itemCurrentFile->GetVideoInfoTag()->GetMediaType());
         db.Close();
       }
       // send a message to all windows to tell them to update the fileitem (eg playlistplayer, media windows)
@@ -1353,7 +1357,8 @@ void CApplication::FrameMove(bool processEvents, bool processGUI)
 
     // Open the door for external calls e.g python exactly here.
     // Window size can be between 2 and 10ms and depends on number of continuous requests
-    if (m_WaitingExternalCalls)
+    // Stop() has already released the guard; don't take it back on the way out
+    if (m_WaitingExternalCalls && !m_bStop)
     {
       CSingleExit ex(CServiceBroker::GetWinSystem()->GetGfxContext());
       m_frameMoveGuard.unlock();
@@ -2212,10 +2217,14 @@ void CApplication::Process()
 
   {
     // Allow processing of script threads to let them shut down properly.
+    // Stop() has already released the guard; don't take it back on the way out
+    const bool releaseGuard = !m_bStop;
     CSingleExit ex(CServiceBroker::GetWinSystem()->GetGfxContext());
-    m_frameMoveGuard.unlock();
+    if (releaseGuard)
+      m_frameMoveGuard.unlock();
     CScriptInvocationManager::GetInstance().Process();
-    m_frameMoveGuard.lock();
+    if (releaseGuard)
+      m_frameMoveGuard.lock();
   }
 
   // process messages, even if a movie is playing

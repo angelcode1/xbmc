@@ -157,12 +157,9 @@ bool CRenderManager::Configure(const VideoPicture& picture, float fps, unsigned 
   }
 
   if (!m_stateEvent.Wait(1000ms))
-  {
     CLog::Log(LOGWARNING, "CRenderManager::Configure - timeout waiting for configure");
-    std::unique_lock lock(m_statelock);
-    return false;
-  }
 
+  // a configure still in progress holds m_statelock, wait for it and use its result
   std::unique_lock lock(m_statelock);
   if (m_renderState != STATE_CONFIGURED)
   {
@@ -1063,14 +1060,16 @@ void CRenderManager::PrepareNextRender()
   // Renderers that hand frames to a hardware plane queue (VideoBypassesFramebuffer)
   // cannot take a released frame back: frames released without the latency during an
   // internal pause (caching, display reset) keep that lead and video stays ahead of audio.
-  const bool isPaused =
-      m_dvdClock.IsPaused() && !(m_pRenderer && m_pRenderer->VideoBypassesFramebuffer());
+  const bool clockPaused = m_dvdClock.IsPaused();
+  const bool isPaused = clockPaused && !(m_pRenderer && m_pRenderer->VideoBypassesFramebuffer());
   double renderPts = frameOnScreen;
   if (!isPaused)
     renderPts += m_displayLatency;
 
+  // GetClockSpeed() keeps the last speed while paused, so check the clock itself;
+  // isPaused is always false for renderers that bypass the framebuffer.
   const double nextFramePts =
-      m_dvdClock.GetClockSpeed() < 0 ? renderPts : m_Queue[m_queued.front()].pts;
+      (!clockPaused && m_dvdClock.GetClockSpeed() < 0) ? renderPts : m_Queue[m_queued.front()].pts;
 
   if (m_clockSync.m_enabled)
   {

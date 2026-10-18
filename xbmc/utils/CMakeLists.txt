@@ -20,6 +20,7 @@ set(SOURCES ActorProtocol.cpp
             DatabaseUtils.cpp
             Digest.cpp
             DiscsUtils.cpp
+            DolbyVisionRpu.cpp
             EndianSwap.cpp
             EmbeddedArt.cpp
             EpisodeUtils.cpp
@@ -109,6 +110,7 @@ set(HEADERS ActorProtocol.h
             DefaultArt.h
             Digest.h
             DiscsUtils.h
+            DolbyVisionRpu.h
             EndianSwap.h
             EpisodeUtils.h
             EventStream.h
@@ -215,9 +217,11 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL Clang)
 endif()
 
 if(TARGET ${APP_NAME_LC}::OpenGl OR TARGET ${APP_NAME_LC}::OpenGLES)
-  list(APPEND SOURCES GLBufferObject.cpp
+  list(APPEND SOURCES GLBufferArena.cpp
+                      GLBufferObject.cpp
                       GLUtils.cpp)
-  list(APPEND HEADERS GLBufferObject.h
+  list(APPEND HEADERS GLBufferArena.h
+                      GLBufferObject.h
                       GLUtils.h)
 endif()
 

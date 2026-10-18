@@ -115,7 +115,7 @@ bool CRetroPlayer::Open(const CFileItem& file, const CPlayerOptions& options)
   // Asked before the game client is set up: the dialog runs the message loop,
   // and a game started from it once the client is playing would close this
   // player in the middle of opening
-  if (!bStandalone)
+  if (!bStandalone && !savestatePath.empty())
   {
     CSavestateDatabase savestateDb;
 
@@ -701,7 +701,13 @@ void CRetroPlayer::SetSpeedInternal(double speed)
   if (speed == 0.0)
     m_playback->PauseAsync();
   else
+  {
     m_playback->SetSpeed(speed);
+
+    // Rewinding runs the game loop slower than the speed shown
+    if (speed < 0.0 && m_gameClient && m_gameClient->RequiresGameLoop())
+      m_renderManager->SetSpeed(m_playback->GetSpeed());
+  }
 }
 
 void CRetroPlayer::OnSpeedChange(double newSpeed)

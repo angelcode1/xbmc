@@ -24,6 +24,8 @@ on:
       - tools/gazelle-fel/audit-stage24-metadata-path.py
       - tools/gazelle-fel/audit-stage25-dovi-registration.py
       - tools/gazelle-fel/audit-stage26-public-dv-receiver.py
+      - tools/gazelle-fel/capture-stage27-readonly.py
+      - docs/gazelle-fel-stage27-installed-resolver-readonly-20261019.md
       - docs/gazelle-fel-stage26-public-dv-receiver-20261019.md
       - docs/gazelle-fel-stage25-dovi-registration-20261019.md
       - docs/gazelle-fel-stage24-metadata-dma-export-20261019.md
@@ -118,6 +120,8 @@ jobs:
           python3 tools/gazelle-fel/audit-stage25-dovi-registration.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage26-public-dv-receiver.py
           python3 tools/gazelle-fel/audit-stage26-public-dv-receiver.py --selftest
+          python3 -m py_compile tools/gazelle-fel/capture-stage27-readonly.py
+          python3 tools/gazelle-fel/capture-stage27-readonly.py --selftest
           PUBLIC="$RUNNER_TEMP/gazelle-fel-stage26-public"
           COMMIT=24a1e36b68d5319f7c4e94a2d6d1badf9f92ba7f
           for path in \

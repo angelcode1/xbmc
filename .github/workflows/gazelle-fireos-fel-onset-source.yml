@@ -16,6 +16,8 @@ on:
       - tools/gazelle-fel/audit-stage16-omx-mode-contract.py
       - tools/gazelle-fel/audit-stage17-native-abi.py
       - tools/gazelle-fel/audit-stage18-native-layout.py
+      - tools/gazelle-fel/audit-stage19-config-lifecycle.py
+      - docs/gazelle-fel-stage19-native-config-ioctl-20261019.md
       - docs/gazelle-fel-stage18-vendor-named-context-layout-20261019.md
       - docs/data/gazelle-fel-stage18-codec-para-fields.json
       - docs/gazelle-fel-stage17-native-abi-contract-20261019.md
@@ -86,3 +88,5 @@ jobs:
           assert {x['field']:x['offset_decimal'] for x in j['fields']}['decoder_type']==0x10a0
           print('GAZELLE_STAGE18_LAYOUT_JSON_SOURCE_PASS')
           PY
+          python3 -m py_compile tools/gazelle-fel/audit-stage19-config-lifecycle.py
+          python3 tools/gazelle-fel/audit-stage19-config-lifecycle.py --selftest

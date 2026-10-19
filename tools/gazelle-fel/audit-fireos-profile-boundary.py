@@ -28,11 +28,15 @@ AOSP_PROFILES = {
 CONTEXTS = {
     "libomx_framework_alt.so": {
         "vendor_parameter_writer": (0x19488, 0x194c0),
+        "dolby_vision_parameter_writer": (0x18fdc, 0x19006),
+        "amlogic_profile_log": (0x1a160, 0x1a186),
         "dolby_component_constructor": (0x164b6, 0x164f8),
         "peer_owner_binding": (0x1db68, 0x1db72),
     },
     "libOmxVideo.so": {
         "legacy_duallayer_gate": (0x21a62, 0x21b04),
+        "dolby_vision_owner_reader": (0x1eb54, 0x1eb76),
+        "dolby_vision_profile_compare": (0x1ee5c, 0x1ee6c),
         "awesome_format_gate": (0x3b682, 0x3b7d0),
         "dolby_decoder_spec": (0x30948, 0x30990),
         "dolby_decoder_es": (0x309a0, 0x309e0),
@@ -45,6 +49,21 @@ CONTEXTS = {
 # Check actual instructions, not just whether disassembly windows are nonempty.
 # Valid only after the full SHA-256 validation above has passed.
 SEMANTIC_GATES = {
+    ("libomx_framework_alt.so", "dolby_vision_parameter_writer"): {
+        0x18fde: r"movt\s+r0,\s*#0x7f80\b",
+        0x18fe2: r"cmp\s+r6,\s*r0\b",
+        0x18ff2: r"str\.w\s+r0,\s*\[r4,\s*#0x36c\]",
+        0x18ffc: r"str\.w\s+r0,\s*\[r4,\s*#0x370\]",
+    },
+    ("libomx_framework_alt.so", "amlogic_profile_log"): {
+        0x1a164: r"ldrd\s+r0,\s*r1,\s*\[r4,\s*#32\]",
+    },
+    ("libOmxVideo.so", "dolby_vision_owner_reader"): {
+        0x1eb6e: r"ldr\.w\s+r8,\s*\[r2,\s*#0x36c\]",
+    },
+    ("libOmxVideo.so", "dolby_vision_profile_compare"): {
+        0x1ee5c: r"cmp\.w\s+r8,\s*#0x400\b",
+    },
     ("libomx_framework_alt.so", "vendor_parameter_writer"): {
         0x194a4: r"str\s+r0,\s*\[r4,\s*#0x20\]",
         0x194a8: r"str\s+r1,\s*\[r4,\s*#0x24\]",

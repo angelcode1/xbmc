@@ -45,7 +45,7 @@ STRINGS=[
 LINE=re.compile(r'^\s*([0-9a-f]+):\s+(?:[0-9a-f]{4}\s+)+([a-z][a-z0-9.]*)\s*(.*)',re.I)
 
 def norm(x):
- return re.sub(r'\s+','',x.split(' @ ',1)[0])
+ return re.sub(r'\s+','',x.split(' @ ',1)[0].split(' <',1)[0])
 
 def elf(root,name):
  p=root/name

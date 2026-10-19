@@ -32,6 +32,10 @@ CONTEXTS = {
         "amlogic_profile_log": (0x1a160, 0x1a186),
         "dolby_component_constructor": (0x164b6, 0x164f8),
         "peer_owner_binding": (0x1db68, 0x1db72),
+        "frame_flags_constructor": (0x163d0, 0x163dc),
+        "dv_frame_property_to_owner": (0x16630, 0x16656),
+        "multi_dec_mode_constructor": (0x16568, 0x1657c),
+        "stream_mode_constructor": (0x16830, 0x1688c),
     },
     "libOmxVideo.so": {
         "legacy_duallayer_gate": (0x21a62, 0x21b04),
@@ -43,6 +47,9 @@ CONTEXTS = {
         "dolby_decoder_es": (0x309a0, 0x309e0),
         "dolby2_decoder_spec": (0x43000, 0x43043),
         "per_instance_meta_ioctl_wrapper": (0x5a1a0, 0x5a1c8),
+        "decoder_mode_property_selection": (0x1ef78, 0x1efd6),
+        "awesome_owner_flag_transfer": (0x26128, 0x26142),
+        "awesome_frame_mode_handoff": (0x263f8, 0x26416),
     },
 }
 
@@ -50,6 +57,42 @@ CONTEXTS = {
 # Check actual instructions, not just whether disassembly windows are nonempty.
 # Valid only after the full SHA-256 validation above has passed.
 SEMANTIC_GATES = {
+    ("libomx_framework_alt.so", "frame_flags_constructor"): {
+        0x163d4: r"str\.w\s+r5,\s*\[r4,\s*#0x109\]",
+    },
+    ("libomx_framework_alt.so", "multi_dec_mode_constructor"): {
+        0x16572: r"strb\.w\s+r0,\s*\[r4,\s*#0x109\]",
+    },
+    ("libomx_framework_alt.so", "dv_frame_property_to_owner"): {
+        0x16632: r"ldr\.w\s+r0,\s*\[pc,",
+        0x1663a: r"bl\s+0x246d0\b",
+        0x16650: r"strb\.w\s+r0,\s*\[r4,\s*#0x10b\]",
+    },
+    ("libomx_framework_alt.so", "stream_mode_constructor"): {
+        0x16832: r"movs\s+r0,\s*#0x1\b",
+        0x16834: r"strb\.w\s+r0,\s*\[r4,\s*#0x10a\]",
+        0x16842: r"ldr\.w\s+r0,\s*\[pc,",
+        0x16888: r"strb\.w\s+r0,\s*\[r4,\s*#0x10a\]",
+    },
+    ("libOmxVideo.so", "decoder_mode_property_selection"): {
+        0x1ef7a: r"ldrb\.w\s+r0,\s*\[r5,\s*#0xdc\]",
+        0x1ef80: r"ldr\s+r0,\s*\[pc,",
+        0x1ef8c: r"ldr\s+r0,\s*\[pc,",
+        0x1ef9a: r"strb\.w\s+r0,\s*\[r5,\s*#0xdd\]",
+        0x1efb6: r"ldrb\.w\s+r0,\s*\[r5,\s*#0xdd\]",
+        0x1efc0: r"ldrb\.w\s+r3,\s*\[r5,\s*#0xdc\]",
+        0x1efd2: r"str\s+r3,\s*\[r4,\s*r0\]",
+    },
+    ("libOmxVideo.so", "awesome_owner_flag_transfer"): {
+        0x2612c: r"ldrb\.w\s+r1,\s*\[r0,\s*#0x109\]",
+        0x26130: r"strb\.w\s+r1,\s*\[r4,\s*#0xdc\]",
+        0x26134: r"ldrb\.w\s+r2,\s*\[r0,\s*#0x10a\]",
+        0x26138: r"strb\.w\s+r2,\s*\[r4,\s*#0xdd\]",
+    },
+    ("libOmxVideo.so", "awesome_frame_mode_handoff"): {
+        0x263f8: r"ldrb\.w\s+r0,\s*\[r4,\s*#0xdd\]",
+        0x26402: r"strb\s+r0,\s*\[r1,\s*#0x18\]",
+    },
     ("libomx_framework_alt.so", "dolby_component_constructor"): {
         0x164c8: r"movs\s+r0,\s*#0xb\b",
         0x164ca: r"str\.w\s+r0,\s*\[r4,\s*#0x3dc\]",
@@ -210,6 +253,8 @@ def main():
     print("VENDOR_INDEX_0x7f00010d_RUNTIME_CALLER=UNKNOWN")
     print("DECODER_META_IOCTL_0x179_RUNTIME=UNKNOWN")
     print("DVHE_HEVC_BRANCH_MAY_BYPASS_DOLBY_PROFILE_COMPARE; RUNTIME_UNVERIFIED")
+    print("FRAME_MODE_OWNER_FLAGS_0x109_0x10a_0x10b=STATIC_CHAIN_VERIFIED_RUNTIME_UNKNOWN")
+    print("AMLOGIC_FRAME_STREAM_DECODER_MODE=CODE_PATH_VERIFIED_NO_DEVICE_TOGGLE")
     print("ACTIVE_EL_RECONSTRUCTION=NOT_ESTABLISHED")
     print("GAZELLE_FIREOS_PROFILE_STATIC_WINDOWS_PASS")
     return 0

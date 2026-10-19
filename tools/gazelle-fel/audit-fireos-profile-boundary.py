@@ -37,6 +37,7 @@ CONTEXTS = {
         "legacy_duallayer_gate": (0x21a62, 0x21b04),
         "dolby_vision_owner_reader": (0x1eb54, 0x1eb76),
         "dolby_vision_profile_compare": (0x1ee5c, 0x1ee6c),
+        "dvhe_hevc_profile_bypass": (0x1eda8, 0x1edd0),
         "awesome_format_gate": (0x3b682, 0x3b7d0),
         "dolby_decoder_spec": (0x30948, 0x30990),
         "dolby_decoder_es": (0x309a0, 0x309e0),
@@ -49,6 +50,17 @@ CONTEXTS = {
 # Check actual instructions, not just whether disassembly windows are nonempty.
 # Valid only after the full SHA-256 validation above has passed.
 SEMANTIC_GATES = {
+    ("libomx_framework_alt.so", "dolby_component_constructor"): {
+        0x164c8: r"movs\s+r0,\s*#0xb\b",
+        0x164ca: r"str\.w\s+r0,\s*\[r4,\s*#0x3dc\]",
+    },
+    ("libOmxVideo.so", "dvhe_hevc_profile_bypass"): {
+        0x1eda8: r"ldr\s+r0,\s*\[r5,\s*#0x4\]",
+        0x1edaa: r"ldr\.w\s+r0,\s*\[r0,\s*#0x3dc\]",
+        0x1edb2: r"cmp\s+r0,\s*#0xb\b",
+        0x1edb4: r"bne\s+0x1ee5c\b",
+        0x1edce: r"b\s+0x1ef1c\b",
+    },
     ("libomx_framework_alt.so", "dolby_vision_parameter_writer"): {
         0x18fde: r"movt\s+r0,\s*#0x7f80\b",
         0x18fe2: r"cmp\s+r6,\s*r0\b",
@@ -197,6 +209,7 @@ def main():
     print("OWNER_PLUS_0x20_RUNTIME_VALUE=UNKNOWN")
     print("VENDOR_INDEX_0x7f00010d_RUNTIME_CALLER=UNKNOWN")
     print("DECODER_META_IOCTL_0x179_RUNTIME=UNKNOWN")
+    print("DVHE_HEVC_BRANCH_MAY_BYPASS_DOLBY_PROFILE_COMPARE; RUNTIME_UNVERIFIED")
     print("ACTIVE_EL_RECONSTRUCTION=NOT_ESTABLISHED")
     print("GAZELLE_FIREOS_PROFILE_STATIC_WINDOWS_PASS")
     return 0

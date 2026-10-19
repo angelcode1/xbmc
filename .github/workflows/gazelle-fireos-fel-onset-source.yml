@@ -22,6 +22,8 @@ on:
       - tools/gazelle-fel/audit-stage22-hevc-role.py
       - tools/gazelle-fel/audit-stage23-aux-data.py
       - tools/gazelle-fel/audit-stage24-metadata-path.py
+      - tools/gazelle-fel/audit-stage25-dovi-registration.py
+      - docs/gazelle-fel-stage25-dovi-registration-20261019.md
       - docs/gazelle-fel-stage24-metadata-dma-export-20261019.md
       - docs/gazelle-fel-stage23-aux-data-selector-20261019.md
       - docs/gazelle-fel-stage22-hevc-role-metadata-20261019.md
@@ -110,3 +112,5 @@ jobs:
           python3 tools/gazelle-fel/audit-stage23-aux-data.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage24-metadata-path.py
           python3 tools/gazelle-fel/audit-stage24-metadata-path.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage25-dovi-registration.py
+          python3 tools/gazelle-fel/audit-stage25-dovi-registration.py --selftest

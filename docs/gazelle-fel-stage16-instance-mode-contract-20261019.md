@@ -28,6 +28,14 @@ In the original framework, the named vendor extension strings include `is-mvc`, 
 
 CoreELEC 22's actual `AMLCodec.cpp` selects stream mode **before** native `codec_init` and uses a stream-buffer-specific `AddData` code path (buffer readiness/thresholds, codec extradata, `write_av_packet` data and PTS handling). Compare https://github.com/CoreELEC/xbmc/blob/aml-5.15.196-22.0/xbmc/cores/VideoPlayer/DVDCodecs/Video/AMLCodec.cpp . This is an independent *different OS/kernel* source comparison. Kodi's current Android MediaCodec route does not implement that direct packet feed. CoreELEC also configures NAL/FEL policy and Dolby gates as a coordinated decoder lifecycle; none should be copied blindly to Fire OS.
 
+## Alternative candidate: exported native codec ABI, not yet usable from Kodi
+
+In the **same hash-pinned** `libOmxVideo.so` the ELF dynamic symbol table exports `GLOBAL DEFAULT`: `codec_init` (Thumb `0x58bdd`), `codec_write` (`0x597d1`), `codec_close` (`0x597dd`), `codec_checkin_pts` (`0x5986f`), and `codec_set_dvmetawithel` (`0x5a1a1`). `codec_write` at `0x597d0` reads the first word of its native codec context as an FD and branches to a linked write routine; this is a **native driver interface**, not Android MediaCodec.
+
+The presence of exports is an **offline engineering lead, not a supported Kodi API**. The vendor ELF has numerous private `DT_NEEDED` libraries. Its Android linker namespace accessibility, SELinux permissions for Kodi UID, exact `codec_para_t` structure layout, stream packet/PTS contract, exclusive decoder-device lifetime and compatibility with the installed audio and Dolby services are **not validated**. Do not `dlopen` or call these functions on the Cube on this evidence.
+
+A possible *independently isolated* P7 backend could be assessed offline using ABI/dependency inventories and the public Amlogic/CoreELEC source as **non-identical** references, before an explicit opt-in device permission test. It must have fail-closed teardown and never change the existing P8 path.
+
 ## Decision
 
 - Stage 13 P7/P8 live capture: both use frame Dolby HEVC node; port flags stable at `0x1d11` (frame) and `0x1911` (stream). The frame node skips the **default** slave allocation; stream node is eligible to **attempt** a slave, but EL and true FEL pixels remain unproven.

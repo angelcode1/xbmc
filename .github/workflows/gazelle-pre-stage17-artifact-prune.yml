@@ -1,0 +1,87 @@
+name: Purge pre-Stage17 GitHub Actions artifacts
+
+# One-off storage cleanup for old workflow artifacts. Never deletes runs,
+# source refs, releases, tags, caches or Stage17-and-later output.
+on:
+  push:
+    branches: [research/gazelle-fireos-fel-20261019]
+    paths:
+      - .github/workflows/gazelle-pre-stage17-artifact-prune.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: xbmc-pre-stage17-artifact-cleanup
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Delete only artifacts from commits older than Stage17
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STAGE17_SHA: 40988843fa6faacee1954920b7e6715211a67e69
+          STAGE17_COMMIT_TIME: '2026-10-19T10:57:37Z'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GH_REPO" = 'angelcode1/xbmc'
+          test "$(gh api "repos/$GH_REPO/commits/$STAGE17_SHA" --jq '.commit.committer.date')" = "$STAGE17_COMMIT_TIME"
+          declare -A checked_commit
+          temp="$(mktemp)"
+          trap 'rm -f "$temp"' EXIT
+          gh api --paginate "repos/$GH_REPO/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired == false) | [(.id|tostring), .name, (.size_in_bytes|tostring), .created_at, (.workflow_run.head_sha // ""), ((.workflow_run.id // 0)|tostring)] | @tsv' > "$temp"
+          count="$(wc -l < "$temp" | tr -d ' ')"
+          echo "ELIGIBLE_ARTIFACT_CATALOGUE_SIZE=$count"
+          echo "Cutoff is STAGE17 commit $STAGE17_SHA at $STAGE17_COMMIT_TIME"
+          # The October 18 unified ARMv7 Kodi APK remains the latest known
+          # upstream packaging input. Keep its run, regardless of age.
+          protected_run='39140459487'
+          inspected=0; deleted=0; saved=0; kept=0
+          while IFS=$'\t' read -r id name bytes created sha run_id; do
+            ((inspected+=1))
+            if ! [[ "$id" =~ ^[0-9]+$ && "$bytes" =~ ^[0-9]+$ && "$run_id" =~ ^[0-9]+$ && "$sha" =~ ^[a-f0-9]{40}$ ]]; then
+              echo "KEEP_UNVERIFIABLE_ID_OR_SHA artifact_id=$id"
+              ((kept+=1))
+              continue
+            fi
+            if [[ "$run_id" == "$protected_run" ]]; then
+              echo "KEEP_PINNED_UNIFIED_KODI run=$run_id artifact=$id name=$name"
+              ((kept+=1))
+              continue
+            fi
+            if [[ "$sha" == "$STAGE17_SHA" ]]; then
+              echo "KEEP_STAGE17 artifact=$id"
+              ((kept+=1))
+              continue
+            fi
+            if [[ -z "${checked_commit[$sha]+x}" ]]; then
+              commit_time="$(gh api "repos/$GH_REPO/commits/$sha" --jq '.commit.committer.date' 2>/dev/null)" || commit_time=''
+              checked_commit[$sha]="$commit_time"
+            fi
+            commit_time="${checked_commit[$sha]}"
+            if [[ ! "$commit_time" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]; then
+              echo "KEEP_UNVERIFIABLE_COMMIT artifact=$id run=$run_id head=$sha"
+              ((kept+=1))
+              continue
+            fi
+            if [[ "$commit_time" == "$STAGE17_COMMIT_TIME" || "$commit_time" > "$STAGE17_COMMIT_TIME" ]]; then
+              echo "KEEP_STAGE17_OR_NEWER artifact=$id commit=$commit_time"
+              ((kept+=1))
+              continue
+            fi
+            # Only a fully verified older head commit can authorize deletion.
+            gh api -X DELETE "repos/$GH_REPO/actions/artifacts/$id" >/dev/null
+            ((deleted+=1)); ((saved+=bytes))
+            echo "PRUNED_PRE_STAGE17 id=$id run=$run_id bytes=$bytes commit=$commit_time name=$name"
+          done < "$temp"
+          printf '## XBMC Stage17 artifact cleanup\nCutoff: %s (%s)\n' "$STAGE17_SHA" "$STAGE17_COMMIT_TIME" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Inspected: %s. Deleted: %s. Retained: %s. Reclaimed artifact bytes: %s.\n' "$inspected" "$deleted" "$kept" "$saved" >> "$GITHUB_STEP_SUMMARY"
+          echo "XBMC_STAGE17_ARTIFACT_CLEANUP_COMPLETE inspected=$inspected deleted=$deleted kept=$kept bytes=$saved"

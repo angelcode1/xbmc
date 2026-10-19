@@ -20,6 +20,8 @@ on:
       - tools/gazelle-fel/audit-stage20-kernel-config.py
       - tools/gazelle-fel/audit-stage21-pair-lifecycle.py
       - tools/gazelle-fel/audit-stage22-hevc-role.py
+      - tools/gazelle-fel/audit-stage23-aux-data.py
+      - docs/gazelle-fel-stage23-aux-data-selector-20261019.md
       - docs/gazelle-fel-stage22-hevc-role-metadata-20261019.md
       - docs/gazelle-fel-stage21-paired-decoder-lifecycle-20261019.md
       - docs/gazelle-fel-stage20-kernel-config-receiver-20261019.md
@@ -102,3 +104,5 @@ jobs:
           python3 tools/gazelle-fel/audit-stage21-pair-lifecycle.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage22-hevc-role.py
           python3 tools/gazelle-fel/audit-stage22-hevc-role.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage23-aux-data.py
+          python3 tools/gazelle-fel/audit-stage23-aux-data.py --selftest

@@ -23,6 +23,8 @@ on:
       - tools/gazelle-fel/audit-stage23-aux-data.py
       - tools/gazelle-fel/audit-stage24-metadata-path.py
       - tools/gazelle-fel/audit-stage25-dovi-registration.py
+      - tools/gazelle-fel/audit-stage26-public-dv-receiver.py
+      - docs/gazelle-fel-stage26-public-dv-receiver-20261019.md
       - docs/gazelle-fel-stage25-dovi-registration-20261019.md
       - docs/gazelle-fel-stage24-metadata-dma-export-20261019.md
       - docs/gazelle-fel-stage23-aux-data-selector-20261019.md
@@ -114,3 +116,18 @@ jobs:
           python3 tools/gazelle-fel/audit-stage24-metadata-path.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage25-dovi-registration.py
           python3 tools/gazelle-fel/audit-stage25-dovi-registration.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage26-public-dv-receiver.py
+          python3 tools/gazelle-fel/audit-stage26-public-dv-receiver.py --selftest
+          PUBLIC="$RUNNER_TEMP/gazelle-fel-stage26-public"
+          COMMIT=24a1e36b68d5319f7c4e94a2d6d1badf9f92ba7f
+          for path in \
+            drivers/amlogic/media/enhancement/amdolby_vision/amdolby_vision.c \
+            drivers/amlogic/media/enhancement/amdolby_vision/amdolby_vision.h \
+            include/linux/amlogic/media/amdolbyvision/dolby_vision.h
+          do
+            mkdir -p "$PUBLIC/$(dirname "$path")"
+            curl -fsSL --retry 3 \
+              "https://raw.githubusercontent.com/TCLOpenSource/a311d2/$COMMIT/$path" \
+              -o "$PUBLIC/$path"
+          done
+          python3 tools/gazelle-fel/audit-stage26-public-dv-receiver.py "$PUBLIC"

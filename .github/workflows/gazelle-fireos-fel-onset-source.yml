@@ -11,6 +11,8 @@ on:
       - docs/gazelle-fel-coreelec-stream-contract-20261019.md
       - tools/gazelle-fel/audit-fireos-profile-boundary.py
       - tools/gazelle-fel/audit-stage12-port-pair.py
+      - tools/gazelle-fel/capture-stage13-live-ports.sh
+      - docs/gazelle-fel-stage13-live-port-state-gate-20261019.md
       - docs/gazelle-fel-stage12-porttype-dolby-hevc-pairing-20261019.md
   workflow_dispatch:
 
@@ -46,3 +48,14 @@ jobs:
           python3 tools/gazelle-fel/audit-fireos-profile-boundary.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage12-port-pair.py
           python3 tools/gazelle-fel/audit-stage12-port-pair.py --selftest
+          bash -n tools/gazelle-fel/capture-stage13-live-ports.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path("tools/gazelle-fel/capture-stage13-live-ports.sh").read_text()
+          code="\n".join(l for l in s.splitlines() if not l.lstrip().startswith("#"))
+          for bad in ("setprop ", "logcat -c", "adb push", "insmod ", "modprobe ", "echo 1 >", "pm install", "force-stop"):
+              assert bad not in code, bad
+          assert 'cat /sys/class/amstream/ports' in code
+          assert 'active-1' in code and 'active-2' in code
+          print("GAZELLE_STAGE13_HOST_CAPTURE_SOURCE_PASS")
+          PY

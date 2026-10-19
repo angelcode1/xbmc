@@ -28,6 +28,8 @@ on:
       - tools/gazelle-fel/capture-stage28-active-comparison.py
       - tools/gazelle-fel/audit-stage29-live-gates.py
       - tools/gazelle-fel/audit-stage30-vendor-profile.py
+      - tools/gazelle-fel/extract-stage30-vendor.py
+      - tools/gazelle-fel/run-stage30-macos.sh
       - docs/gazelle-fel-stage30-original-vendor-profile-gates-20261020.md
       - tools/gazelle-fel/run-stage29-macos.sh
       - docs/gazelle-fel-stage29-active-profile-decision-20261019.md
@@ -136,6 +138,19 @@ jobs:
           python3 tools/gazelle-fel/audit-stage29-live-gates.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage30-vendor-profile.py
           python3 tools/gazelle-fel/audit-stage30-vendor-profile.py --selftest
+          python3 -m py_compile tools/gazelle-fel/extract-stage30-vendor.py
+          bash -n tools/gazelle-fel/run-stage30-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          e=Path('tools/gazelle-fel/extract-stage30-vendor.py').read_text()
+          r=Path('tools/gazelle-fel/run-stage30-macos.sh').read_text()
+          for s in (e,r):
+              for forbidden in ('adb shell', 'setprop ', 'logcat -c', 'insmod ', 'modprobe ', 'pm install'):
+                  assert forbidden not in s, forbidden
+          assert 'PRIVATE=' in r and 'SCRIPT_PIN_PASS' in r
+          assert 'PINS' in e and 'file_sha(image)' in e
+          print('GAZELLE_STAGE30_OFFLINE_SOURCE_SAFETY_PASS')
+          PY
           bash -n tools/gazelle-fel/run-stage29-macos.sh
           bash -n tools/gazelle-fel/run-stage28-macos.sh
           python3 - <<'PY'

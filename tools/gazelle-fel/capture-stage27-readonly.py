@@ -8,6 +8,7 @@ Observed symbols/providers are not proof of a connected FEL decoder or pixels.
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -55,6 +56,11 @@ def scrub(data):
     return data[:MAX_TEXT]
 
 def adb_binary():
+    explicit = os.environ.get("ADB")
+    if explicit:
+        found = shutil.which(explicit)
+        if found: return found
+        raise RuntimeError("ADB executable not found: "+explicit)
     found = shutil.which("adb")
     if found:
         return found
@@ -83,7 +89,7 @@ def run(adb, remote, root=False):
 def parse_symbols(data):
     found = set()
     for line in data.splitlines():
-        match = re.match(r"^\s*[0-9a-fA-F]+\s+([A-Za-z])\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+\[([A-Za-z0-9_.-]+)\])?\s*$", line)
+        match = re.match(r"^\s*(?:[0-9a-fA-F]+|<masked-address>)\s+([A-Za-z])\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+\[([A-Za-z0-9_.-]+)\])?\s*$", line)
         if match and match[2] in SYMBOL_NAMES:
             found.add((match[2], match[1], match[3] or "built-in/unspecified"))
     return [{"name":name,"type":kind,"source":module} for name,kind,module in sorted(found)]

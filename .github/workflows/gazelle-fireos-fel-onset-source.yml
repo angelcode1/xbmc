@@ -12,6 +12,8 @@ on:
       - tools/gazelle-fel/audit-fireos-profile-boundary.py
       - tools/gazelle-fel/audit-stage12-port-pair.py
       - tools/gazelle-fel/capture-stage13-live-ports.sh
+      - tools/gazelle-fel/audit-stage15-mvc-index.py
+      - docs/gazelle-fel-stage15-mvc-overlap-20261019.md
       - docs/gazelle-fel-stage13-live-port-state-gate-20261019.md
       - docs/gazelle-fel-stage12-porttype-dolby-hevc-pairing-20261019.md
   workflow_dispatch:
@@ -59,3 +61,5 @@ jobs:
           assert 'active-1' in code and 'active-2' in code
           print("GAZELLE_STAGE13_HOST_CAPTURE_SOURCE_PASS")
           PY
+          python3 -m py_compile tools/gazelle-fel/audit-stage15-mvc-index.py
+          python3 tools/gazelle-fel/audit-stage15-mvc-index.py --selftest

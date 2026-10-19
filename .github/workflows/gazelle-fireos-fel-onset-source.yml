@@ -13,6 +13,8 @@ on:
       - tools/gazelle-fel/audit-stage12-port-pair.py
       - tools/gazelle-fel/capture-stage13-live-ports.sh
       - tools/gazelle-fel/audit-stage15-mvc-index.py
+      - tools/gazelle-fel/audit-stage16-omx-mode-contract.py
+      - docs/gazelle-fel-stage16-instance-mode-contract-20261019.md
       - docs/gazelle-fel-stage15-mvc-overlap-20261019.md
       - docs/gazelle-fel-stage13-live-port-state-gate-20261019.md
       - docs/gazelle-fel-stage12-porttype-dolby-hevc-pairing-20261019.md
@@ -63,3 +65,5 @@ jobs:
           PY
           python3 -m py_compile tools/gazelle-fel/audit-stage15-mvc-index.py
           python3 tools/gazelle-fel/audit-stage15-mvc-index.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage16-omx-mode-contract.py
+          python3 tools/gazelle-fel/audit-stage16-omx-mode-contract.py --selftest

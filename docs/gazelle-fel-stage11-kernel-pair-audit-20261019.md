@@ -7,11 +7,11 @@ This report covers a **read-only offline** audit of the user's `gazelle-fel-kern
 `stream_input.ko` SHA256 `fc6ef560f6d86d3359cf1f8b0a185971984e024b93818e19272e6e76ac04d14c`: `amstream_open` at `0x1320`.
 
 - `0x1610`: primary `vdec_create(port, NULL)`; exact symbol established by `R_AARCH64_CALL26` relocation.
-- `0x1620`: if bit 10 (`0x400`) in the port's flags is set, skip the secondary-decoder path.
-- `0x1628`: bit 12 (`0x1000`) takes the second-decoder path.
+- `0x1620`: if bit 10 (`0x400`) in **`port->type`** is set, skip the secondary-decoder path.
+- `0x1628`: bit 12 (`0x1000`) in **`port->type`** takes the second-decoder path.
 - Otherwise `0x162c` calls `vdec_get_debug_flags`, and `0x1630` checks bit 8 (`0x100`) for a possible alternative entrance.
 - `0x163c`: second call to `vdec_create(port, primary)`; `0x1644` writes the pointer to `primary+0x40`; `0x1650` checks it for null.
-- **These port-bit meanings are NOT identified symbolic flag names, and none is verified as a FEL switch.** Which branch active P7 takes is unmeasured.
+- **These are checks on `port->type`, not on `vdec->port_flag`. The symbolic meanings are not established by this exact ELF, and neither bit is verified as a FEL switch.** Which branch active P7 takes is unmeasured.
 
 `decoder_common.ko` SHA256 `a10f33ca4d3c0e8fd7aa58a495d64559a338f009e2652c238852a009d98a0c6b`: `vdec_create()` at `0x824` assigns `new->master=primary` at `0x944`, `primary->slave=new` at `0x948`, and marks master-state at `0x94c` when supplied a master pointer. Independently the original `struct vdec_s` **DWARF** describes `master` at `0x38` (56), `slave` at `0x40` (64). This confirms paired *creation* can occur, beyond the mere presence of struct fields.
 
@@ -29,10 +29,10 @@ This report covers a **read-only offline** audit of the user's `gazelle-fel-kern
 
 **Resolved:** Fire OS's 5.4 kernel has an actual conditional second-vdec creation path, real master/slave relationships, per-instance EL metadata control, and HEVC BL/EL metadata logic. This narrows the failure investigation to the creation/configuration **conditions** and later decode/metadata processing, rather than an absolute absence of kernel support code.
 
-**Not resolved:** whether the active Kodi P7 playback sets the relevant port flags, creates a slave decoder, invokes `0x179` with suitable values, or reconstructs an FEL residual. Earlier P7 evidence has `[0]dv dual layer` but active `dveldec(0)` and `HDR10 FORMAT_HDR10`; P8 correctly yields DOVI. Previous port flag log values `0x102` and `0x10b` do not contain `0x400` or `0x1000`, but their correspondence to the precise `amstream_open` flag field **has not been proven**. The debug flag alternative is likewise unmeasured. Do not force bits/properties/decoder ioctls based on this static information.
+**Not resolved:** whether the active Kodi P7 playback sets the relevant port flags, creates a slave decoder, invokes `0x179` with suitable values, or reconstructs an FEL residual. Earlier P7 evidence has `[0]dv dual layer` but active `dveldec(0)` and `HDR10 FORMAT_HDR10`; P8 correctly yields DOVI. Previous `vdec->port_flag` log values `0x102` and `0x10b` are **not comparable to these `port->type` checks**; they are different fields. The debug flag alternative is likewise unmeasured. Do not force bits/properties/decoder ioctls based on this static information.
 
 ## Reproducibility and next gate
 
 The standalone local `gazelle_fel_stage11_kernel_audit.py` validated all **6** SHA-pinned ELF64 AArch64 modules, **24** exact ARM64 instruction patterns, **6** relocation targets, **3** original DWARF offsets and **5** HEVC EL-related markers. It completed `GAZELLE_FEL_STAGE11_OFFLINE_PASS instruction_checks=24`. Its audit output and script were delivered privately; the raw modules were not committed.
 
-**Next:** statically trace which port flags are set by the **frame** and **stream** Dolby HEVC amstream opens and how those flags reach the conditional second `vdec_create()`. A suitable hypothesis test should compare P7 vs P8 **at the open/port flags boundary**, not just Docker/Kodi packet counts. Avoid live `media.codec` injection, a speculative stream-mode property toggle, `nal_skip_policy`/`dolby_meta_with_el` sysfs writes, external `0x179` injection, or transplanting CoreELEC kernel modules. Preserve P8 playback, satellite, passthrough and optical UDF/MMBD.
+**Next:** statically trace which port-type bits are set by the **frame** and **stream** Dolby HEVC amstream opens and how those flags reach the conditional second `vdec_create()`. A suitable hypothesis test should compare P7 vs P8 **at the open/port flags boundary**, not just Docker/Kodi packet counts. Avoid live `media.codec` injection, a speculative stream-mode property toggle, `nal_skip_policy`/`dolby_meta_with_el` sysfs writes, external `0x179` injection, or transplanting CoreELEC kernel modules. Preserve P8 playback, satellite, passthrough and optical UDF/MMBD.

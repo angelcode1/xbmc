@@ -1,0 +1,40 @@
+name: Gazelle Fire OS FEL onset source gate
+
+on:
+  push:
+    branches:
+      - research/gazelle-fireos-fel-20261019
+    paths:
+      - .github/workflows/gazelle-fireos-fel-onset-source.yml
+      - tools/gazelle-fel/capture-fireos-vendor-onset.sh
+      - docs/gazelle-fireos-fel-coreelec-t7-20261019.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Syntax and fail-closed read-only device operations
+        run: |
+          set -euo pipefail
+          f=tools/gazelle-fel/capture-fireos-vendor-onset.sh
+          bash -n "$f"
+          python3 - <<'PY'
+          from pathlib import Path
+          f=Path("tools/gazelle-fel/capture-fireos-vendor-onset.sh")
+          text=f.read_text()
+          code="\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+          for forbidden in ["logcat -c", "adb push", "setprop ", "su -c 'echo ", "mount -t ", "umount ", "insmod ", "modprobe ", "stop media.codec"]:
+              assert forbidden not in code, forbidden
+          assert 'logcat -b main -b system -T 1' in code
+          assert 'su -c' in code
+          assert 'snapshot active' in code
+          print("GAZELLE_FEL_ONSET_READONLY_SOURCE_PASS")
+          PY

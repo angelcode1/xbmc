@@ -17,6 +17,8 @@ on:
       - tools/gazelle-fel/audit-stage17-native-abi.py
       - tools/gazelle-fel/audit-stage18-native-layout.py
       - tools/gazelle-fel/audit-stage19-config-lifecycle.py
+      - tools/gazelle-fel/audit-stage20-kernel-config.py
+      - docs/gazelle-fel-stage20-kernel-config-receiver-20261019.md
       - docs/gazelle-fel-stage19-native-config-ioctl-20261019.md
       - docs/gazelle-fel-stage18-vendor-named-context-layout-20261019.md
       - docs/data/gazelle-fel-stage18-codec-para-fields.json
@@ -90,3 +92,5 @@ jobs:
           PY
           python3 -m py_compile tools/gazelle-fel/audit-stage19-config-lifecycle.py
           python3 tools/gazelle-fel/audit-stage19-config-lifecycle.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage20-kernel-config.py
+          python3 tools/gazelle-fel/audit-stage20-kernel-config.py --selftest

@@ -8,6 +8,8 @@ on:
       - .github/workflows/gazelle-fireos-fel-onset-source.yml
       - tools/gazelle-fel/capture-fireos-vendor-onset.sh
       - docs/gazelle-fireos-fel-coreelec-t7-20261019.md
+      - docs/gazelle-fel-coreelec-stream-contract-20261019.md
+      - tools/gazelle-fel/audit-fireos-profile-boundary.py
   workflow_dispatch:
 
 permissions:
@@ -38,3 +40,5 @@ jobs:
           assert 'snapshot active' in code
           print("GAZELLE_FEL_ONSET_READONLY_SOURCE_PASS")
           PY
+          python3 -m py_compile tools/gazelle-fel/audit-fireos-profile-boundary.py
+          python3 tools/gazelle-fel/audit-fireos-profile-boundary.py --selftest

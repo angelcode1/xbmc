@@ -21,6 +21,8 @@ on:
       - tools/gazelle-fel/audit-stage21-pair-lifecycle.py
       - tools/gazelle-fel/audit-stage22-hevc-role.py
       - tools/gazelle-fel/audit-stage23-aux-data.py
+      - tools/gazelle-fel/audit-stage24-metadata-path.py
+      - docs/gazelle-fel-stage24-metadata-dma-export-20261019.md
       - docs/gazelle-fel-stage23-aux-data-selector-20261019.md
       - docs/gazelle-fel-stage22-hevc-role-metadata-20261019.md
       - docs/gazelle-fel-stage21-paired-decoder-lifecycle-20261019.md
@@ -106,3 +108,5 @@ jobs:
           python3 tools/gazelle-fel/audit-stage22-hevc-role.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage23-aux-data.py
           python3 tools/gazelle-fel/audit-stage23-aux-data.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage24-metadata-path.py
+          python3 tools/gazelle-fel/audit-stage24-metadata-path.py --selftest

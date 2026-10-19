@@ -1,0 +1,299 @@
+{
+  "sha256": "eb79f44c3b327e140ef0faedaab3b82ce7ed2f9bf0531fb4b28c532feef90e77",
+  "logger_va": "0x588ad",
+  "named_field_count": 40,
+  "fields": [
+    {
+      "field": "handle",
+      "offset_hex": "0x0",
+      "offset_decimal": 0,
+      "load_instruction": "0x588b8",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "cntl_handle",
+      "offset_hex": "0x4",
+      "offset_decimal": 4,
+      "load_instruction": "0x588c6",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "sub_handle",
+      "offset_hex": "0x8",
+      "offset_decimal": 8,
+      "load_instruction": "0x588d4",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "audio_utils_handle",
+      "offset_hex": "0xc",
+      "offset_decimal": 12,
+      "load_instruction": "0x588e2",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "stream_type",
+      "offset_hex": "0x10",
+      "offset_decimal": 16,
+      "load_instruction": "0x588f0",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "has_video",
+      "offset_hex": "0x14",
+      "offset_decimal": 20,
+      "load_instruction": "0x588fe",
+      "kind": "bit 0 of byte"
+    },
+    {
+      "field": "has_audio",
+      "offset_hex": "0x14",
+      "offset_decimal": 20,
+      "load_instruction": "0x5890e",
+      "kind": "bit 1 of byte"
+    },
+    {
+      "field": "has_sub",
+      "offset_hex": "0x14",
+      "offset_decimal": 20,
+      "load_instruction": "0x58920",
+      "kind": "bit 2 of byte"
+    },
+    {
+      "field": "noblock",
+      "offset_hex": "0x14",
+      "offset_decimal": 20,
+      "load_instruction": "0x58932",
+      "kind": "bit 3 of byte"
+    },
+    {
+      "field": "video_type",
+      "offset_hex": "0x18",
+      "offset_decimal": 24,
+      "load_instruction": "0x58946",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "audio_type",
+      "offset_hex": "0x1c",
+      "offset_decimal": 28,
+      "load_instruction": "0x58954",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "sub_type",
+      "offset_hex": "0x20",
+      "offset_decimal": 32,
+      "load_instruction": "0x58962",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "video_pid",
+      "offset_hex": "0x24",
+      "offset_decimal": 36,
+      "load_instruction": "0x58970",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "audio_pid",
+      "offset_hex": "0x28",
+      "offset_decimal": 40,
+      "load_instruction": "0x5897e",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "sub_pid",
+      "offset_hex": "0x2c",
+      "offset_decimal": 44,
+      "load_instruction": "0x5898c",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "audio_channels",
+      "offset_hex": "0x30",
+      "offset_decimal": 48,
+      "load_instruction": "0x5899a",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "audio_samplerate",
+      "offset_hex": "0x34",
+      "offset_decimal": 52,
+      "load_instruction": "0x589a8",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "vbuf_size",
+      "offset_hex": "0x38",
+      "offset_decimal": 56,
+      "load_instruction": "0x589b6",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "abuf_size",
+      "offset_hex": "0x3c",
+      "offset_decimal": 60,
+      "load_instruction": "0x589c4",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "am_sysinfo.format",
+      "offset_hex": "0x40",
+      "offset_decimal": 64,
+      "load_instruction": "0x589d2",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "am_sysinfo.width",
+      "offset_hex": "0x44",
+      "offset_decimal": 68,
+      "load_instruction": "0x589e0",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "am_sysinfo.height",
+      "offset_hex": "0x48",
+      "offset_decimal": 72,
+      "load_instruction": "0x589ee",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "am_sysinfo.rate",
+      "offset_hex": "0x4c",
+      "offset_decimal": 76,
+      "load_instruction": "0x589fc",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "am_sysinfo.extra",
+      "offset_hex": "0x50",
+      "offset_decimal": 80,
+      "load_instruction": "0x58a0a",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "am_sysinfo.status",
+      "offset_hex": "0x54",
+      "offset_decimal": 84,
+      "load_instruction": "0x58a18",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "am_sysinfo.ratio",
+      "offset_hex": "0x58",
+      "offset_decimal": 88,
+      "load_instruction": "0x58a26",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "am_sysinfo.ratio64",
+      "offset_hex": "0x60",
+      "offset_decimal": 96,
+      "load_instruction": "0x58a32",
+      "kind": "64-bit, loaded via ldrd"
+    },
+    {
+      "field": "packet_size",
+      "offset_hex": "0x1084",
+      "offset_decimal": 4228,
+      "load_instruction": "0x58a4e",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "avsync_threshold",
+      "offset_hex": "0x1088",
+      "offset_decimal": 4232,
+      "load_instruction": "0x58a60",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "SessionID",
+      "offset_hex": "0x1090",
+      "offset_decimal": 4240,
+      "load_instruction": "0x58a72",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "dspdec_not_supported",
+      "offset_hex": "0x1094",
+      "offset_decimal": 4244,
+      "load_instruction": "0x58a84",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "switch_audio_flag",
+      "offset_hex": "0x1098",
+      "offset_decimal": 4248,
+      "load_instruction": "0x58a96",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "automute_flag",
+      "offset_hex": "0x109c",
+      "offset_decimal": 4252,
+      "load_instruction": "0x58aa8",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "decoder_type",
+      "offset_hex": "0x10a0",
+      "offset_decimal": 4256,
+      "load_instruction": "0x58aba",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "dves_type",
+      "offset_hex": "0x10a4",
+      "offset_decimal": 4260,
+      "load_instruction": "0x58acc",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "drmmode",
+      "offset_hex": "0x10a8",
+      "offset_decimal": 4264,
+      "load_instruction": "0x58ade",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "video_path",
+      "offset_hex": "0x10ac",
+      "offset_decimal": 4268,
+      "load_instruction": "0x58af0",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "receive_id",
+      "offset_hex": "0x10b0",
+      "offset_decimal": 4272,
+      "load_instruction": "0x58b02",
+      "kind": "32-bit field"
+    },
+    {
+      "field": "config",
+      "offset_hex": "0x10b4",
+      "offset_decimal": 4276,
+      "load_instruction": "0x58b14",
+      "kind": "inline pointer to string"
+    },
+    {
+      "field": "config_len",
+      "offset_hex": "0x12b4",
+      "offset_decimal": 4788,
+      "load_instruction": "0x58b26",
+      "kind": "32-bit field"
+    }
+  ],
+  "bounds": {
+    "config_start": "0x10b4",
+    "config_len": "0x12b4",
+    "inline_config_span_bytes": 512,
+    "reset_value": "0x12b8",
+    "dolby_meta_with_el": "0x12c0",
+    "minimum_observed_context_bytes": 4804,
+    "exact_size": "UNKNOWN"
+  },
+  "source": "Original vendor log format addresses matched to original ARM loads",
+  "verified_init_instructions": 6,
+  "note": "Read-only static partial field map, NOT a complete C struct or safe allocation template"
+}

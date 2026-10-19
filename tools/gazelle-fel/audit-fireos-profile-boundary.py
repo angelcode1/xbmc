@@ -41,6 +41,48 @@ CONTEXTS = {
     },
 }
 
+
+# Check actual instructions, not just whether disassembly windows are nonempty.
+# Valid only after the full SHA-256 validation above has passed.
+SEMANTIC_GATES = {
+    ("libomx_framework_alt.so", "vendor_parameter_writer"): {
+        0x194a4: r"str\s+r0,\s*\[r4,\s*#0x20\]",
+        0x194a8: r"str\s+r1,\s*\[r4,\s*#0x24\]",
+    },
+    ("libomx_framework_alt.so", "peer_owner_binding"): {
+        0x1db6e: r"str\s+r1,\s*\[r0,\s*#0x4\]",
+    },
+    ("libOmxVideo.so", "legacy_duallayer_gate"): {
+        0x21a68: r"cmp\s+r1,\s*#0xb\b",
+        0x21aca: r"cmp\s+r0,\s*#0x10\b",
+        0x21ad4: r"ldr\.w\s+r2,\s*\[pc,",
+    },
+    ("libOmxVideo.so", "awesome_format_gate"): {
+        0x3b69c: r"cmp\s+r0,\s*#0x10\b",
+        0x3b746: r"movs\s+r6,\s*#0xb\b",
+    },
+    ("libOmxVideo.so", "dolby_decoder_spec"): {
+        0x3095a: r"cmp\.w\s+r2,\s*#0x400\b",
+    },
+    ("libOmxVideo.so", "dolby2_decoder_spec"): {
+        0x43014: r"cmp\.w\s+r2,\s*#0x400\b",
+    },
+    ("libOmxVideo.so", "per_instance_meta_ioctl_wrapper"): {
+        0x5a1a6: r"movw\s+r2,\s*#0x179\b",
+    },
+}
+INSTRUCTION_RE = re.compile(
+    r"^\s*([0-9a-f]+):\s+(?:[0-9a-f]{4}\s+)+([a-z][a-z0-9.]*)\s*(.*)"
+)
+
+def parse_instructions(output):
+    parsed = {}
+    for line in output.splitlines():
+        m = INSTRUCTION_RE.match(line)
+        if m:
+            parsed[int(m[1], 16)] = m[2] + " " + m[3]
+    return parsed
+
 def digest(path):
     h = hashlib.sha256()
     with path.open("rb") as fd:
@@ -111,6 +153,13 @@ def main():
             if n == 0:
                 print(f"EMPTY_WINDOW {name} {label}: no analysis supported", file=sys.stderr)
                 return 2
+            instructions = parse_instructions(output)
+            for addr, pattern in SEMANTIC_GATES.get((name, label), {}).items():
+                actual = instructions.get(addr, "")
+                if not re.search(pattern, actual):
+                    print(f"SEMANTIC_GATE_FAIL {name} {label} 0x{addr:x}: {actual!r}", file=sys.stderr)
+                    return 1
+            print(f"SEMANTIC_GATE_PASS {name} {label} checked={len(SEMANTIC_GATES.get((name, label), {}))}")
     video = root / "libOmxVideo.so"
     try:
         result = subprocess.run([objdump, "-d", "--triple=thumbv7a-linux-android", str(video)],

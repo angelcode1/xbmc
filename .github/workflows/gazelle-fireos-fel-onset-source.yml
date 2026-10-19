@@ -15,6 +15,9 @@ on:
       - tools/gazelle-fel/audit-stage15-mvc-index.py
       - tools/gazelle-fel/audit-stage16-omx-mode-contract.py
       - tools/gazelle-fel/audit-stage17-native-abi.py
+      - tools/gazelle-fel/audit-stage18-native-layout.py
+      - docs/gazelle-fel-stage18-vendor-named-context-layout-20261019.md
+      - docs/data/gazelle-fel-stage18-codec-para-fields.json
       - docs/gazelle-fel-stage17-native-abi-contract-20261019.md
       - docs/gazelle-fel-stage16-instance-mode-contract-20261019.md
       - docs/gazelle-fel-stage15-mvc-overlap-20261019.md
@@ -71,3 +74,15 @@ jobs:
           python3 tools/gazelle-fel/audit-stage16-omx-mode-contract.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage17-native-abi.py
           python3 tools/gazelle-fel/audit-stage17-native-abi.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage18-native-layout.py
+          python3 tools/gazelle-fel/audit-stage18-native-layout.py --selftest
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          j=json.loads(Path('docs/data/gazelle-fel-stage18-codec-para-fields.json').read_text())
+          assert j['named_field_count']==40 and len(j['fields'])==40
+          assert j['bounds']['minimum_observed_context_bytes']==4804
+          assert j['bounds']['exact_size']=='UNKNOWN'
+          assert {x['field']:x['offset_decimal'] for x in j['fields']}['decoder_type']==0x10a0
+          print('GAZELLE_STAGE18_LAYOUT_JSON_SOURCE_PASS')
+          PY

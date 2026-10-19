@@ -39,6 +39,9 @@ CONTEXTS = {
     },
     "libOmxVideo.so": {
         "legacy_duallayer_gate": (0x21a62, 0x21b04),
+        "dolby_wrapper_routes": (0x308ac, 0x309d6),
+        "codec_dv_hevc_device_selection": (0x590c8, 0x590e8),
+        "codec_dv_frame_stream_switch": (0x58cbe, 0x58cf6),
         "dolby_vision_owner_reader": (0x1eb54, 0x1eb76),
         "dolby_vision_profile_compare": (0x1ee5c, 0x1ee6c),
         "dvhe_hevc_profile_bypass": (0x1eda8, 0x1edd0),
@@ -125,6 +128,26 @@ SEMANTIC_GATES = {
     },
     ("libomx_framework_alt.so", "peer_owner_binding"): {
         0x1db6e: r"str\s+r1,\s*\[r0,\s*#0x4\]",
+    },
+    ("libOmxVideo.so", "dolby_wrapper_routes"): {
+        0x308b0: r"bl\s+0x66b24\b",
+        0x3095a: r"cmp\.w\s+r2,\s*#0x400\b",
+        0x3096c: r"bne\s+0x3098c\b",
+        0x30986: r"bl\s+0x66b44\b",
+        0x309a4: r"bl\s+0x66b54\b",
+        0x309ce: r"b\.w\s+0x66b64\b",
+        0x309d2: r"b\.w\s+0x66b74\b",
+    },
+    ("libOmxVideo.so", "codec_dv_frame_stream_switch"): {
+        0x58ce6: r"cmp\s+r2,\s*#0x1\b",
+        0x58cea: r"moveq\s+r0,\s*r3\b",
+    },
+    ("libOmxVideo.so", "codec_dv_hevc_device_selection"): {
+        0x590d0: r"mov\.w\s+r0,\s*#0x10a0\b",
+        0x590d8: r"ldr\.w\s+r2,\s*\[r8,\s*r0\]",
+        0x590d4: r"ldr\.w\s+r3,\s*\[pc,",
+        0x590dc: r"ldr\.w\s+r0,\s*\[pc,",
+        0x590e4: r"b\s+0x58ce6\b",
     },
     ("libOmxVideo.so", "legacy_duallayer_gate"): {
         0x21a68: r"cmp\s+r1,\s*#0xb\b",
@@ -255,6 +278,7 @@ def main():
     print("DVHE_HEVC_BRANCH_MAY_BYPASS_DOLBY_PROFILE_COMPARE; RUNTIME_UNVERIFIED")
     print("FRAME_MODE_OWNER_FLAGS_0x109_0x10a_0x10b=STATIC_CHAIN_VERIFIED_RUNTIME_UNKNOWN")
     print("AMLOGIC_FRAME_STREAM_DECODER_MODE=CODE_PATH_VERIFIED_NO_DEVICE_TOGGLE")
+    print("DV_HEVC_FRAME_STREAM_PATH=STAGE10_STATIC_GATE_PASS_ACTIVE_EL_UNPROVEN")
     print("ACTIVE_EL_RECONSTRUCTION=NOT_ESTABLISHED")
     print("GAZELLE_FIREOS_PROFILE_STATIC_WINDOWS_PASS")
     return 0

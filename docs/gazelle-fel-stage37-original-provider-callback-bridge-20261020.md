@@ -1,3 +1,5 @@
+> **Stage 39 correction (2026-10-20):** The original, SHA-pinned `amvdec_h265.ko` contains relocation-bound literal names `dvbldec`, `dveldec`, `dvbldec2` and `dveldec2` inside `ammvdec_h265_probe()`, and chooses among them using the original named `is_stream_mode_dv_multi`, `dv_toggle_prov_name` and `vdec_s.master` fields. The generic `decoder.h265` literal belongs to a separate compiled provider-initialization path. Thus the Stage 37 "unresolved name discrepancy" is explained at original-module source level; the **runtime P7 values, receiver invocation, EL slave and residual pixel output remain unverified**. See [Stage 39](gazelle-fel-stage39-original-provider-naming-20261020.md).
+
 # Gazelle FEL Stage 37 — original provider callback registration, Dolby interface and unresolved alias
 
 **2026-10-20. ORIGINAL AMAZON MODULE OFFLINE AUDIT PASS; no new Cube access.** The owner-uploaded `stage36-audit-results(1).txt` passes exact HEVC `set_aux_data`, `dolby_get_meta` and `vh265_event_cb` checks. **True Profile 7 FEL residual pixel reconstruction remains NOT PROVEN.**

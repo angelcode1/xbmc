@@ -30,6 +30,9 @@ on:
       - tools/gazelle-fel/audit-stage30-vendor-profile.py
       - tools/gazelle-fel/audit-stage31-config-ack.py
       - tools/gazelle-fel/capture-stage32-log-gates.py
+      - tools/gazelle-fel/audit-stage33-original-hevc-config.py
+      - tools/gazelle-fel/run-stage33-macos.sh
+      - docs/gazelle-fel-stage33-hevc-config-precedence-20261020.md
       - tools/gazelle-fel/run-stage32-macos.sh
       - docs/gazelle-fel-stage32-passive-ioctl-log-compare-20261020.md
       - tools/gazelle-fel/run-stage31-macos.sh
@@ -148,6 +151,21 @@ jobs:
           python3 tools/gazelle-fel/audit-stage31-config-ack.py --selftest
           python3 -m py_compile tools/gazelle-fel/capture-stage32-log-gates.py
           python3 tools/gazelle-fel/capture-stage32-log-gates.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage33-original-hevc-config.py
+          python3 tools/gazelle-fel/audit-stage33-original-hevc-config.py --selftest
+          bash -n tools/gazelle-fel/run-stage33-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('tools/gazelle-fel/audit-stage33-original-hevc-config.py').read_text()
+          run=Path('tools/gazelle-fel/run-stage33-macos.sh').read_text()
+          assert 'GATES = {' in src and 'KEYS = {' in src
+          assert '14cbd648a32d492c58ad3a9dde75f076cbcb5837' in run
+          assert 'GAZELLE_FEL_STAGE33_ORIGINAL_HEVC_OFFLINE_PASS' in src
+          for code in (src,run):
+              for bad in ('adb shell', 'setprop ', 'logcat -c', 'pm install', 'insmod ', 'modprobe '):
+                  assert bad not in code, bad
+          print('GAZELLE_STAGE33_SOURCE_SAFETY_PASS')
+          PY
           bash -n tools/gazelle-fel/run-stage32-macos.sh
           python3 - <<'PY'
           from pathlib import Path

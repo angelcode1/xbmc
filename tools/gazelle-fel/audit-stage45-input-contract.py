@@ -105,7 +105,11 @@ def kodi_source_audit(path):
         raise ValueError('BL/EL predicate now checks timestamps: review needed')
     if not re.search(r'while\s*\(m_doviLayerPackets\.size\(\)\s*>\s*8\)',add):
         raise ValueError('Kodi pair queue cap differs')
-    if not re.search(r'if\s*\(\(size_t\)iSize\s*>\s*out_size\)\s*\{[^{}]*iSize\s*=\s*out_size\s*;',add,re.S):
+    # Format strings inside the block contain literal braces (e.g. '{}').
+    # Bound the check by the following comment instead of using a brace-naive regex.
+    cap = region(add, 'if ((size_t)iSize > out_size)',
+                 '// Inspect exactly the size that fits MediaCodec')
+    if len(cap)>1000 or not re.search(r'iSize\s*=\s*out_size\s*;', cap):
         raise ValueError('Kodi MediaCodec capacity truncation path differs')
     required=[r'm_codec->getInputBuffer\(m_indexInputBuffer\)',
               r'memcpy\(dst_ptr,\s*pData,\s*iSize\)',

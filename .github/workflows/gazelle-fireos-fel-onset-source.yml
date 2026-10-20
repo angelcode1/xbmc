@@ -38,6 +38,9 @@ on:
       - tools/gazelle-fel/capture-stage38-provider-graph.py
       - tools/gazelle-fel/audit-stage39-provider-names.py
       - tools/gazelle-fel/audit-stage40-pair-open-release.py
+      - tools/gazelle-fel/stage41-instance-status.py
+      - tools/gazelle-fel/run-stage41-macos.sh
+      - docs/gazelle-fel-stage41-vdec-status-visibility-20261020.md
       - tools/gazelle-fel/run-stage40-macos.sh
       - docs/gazelle-fel-stage40-original-paired-open-lifecycle-20261020.md
       - tools/gazelle-fel/run-stage39-macos.sh
@@ -189,6 +192,25 @@ jobs:
           python3 tools/gazelle-fel/audit-stage39-provider-names.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage40-pair-open-release.py
           python3 tools/gazelle-fel/audit-stage40-pair-open-release.py --selftest
+          python3 -m py_compile tools/gazelle-fel/stage41-instance-status.py
+          python3 tools/gazelle-fel/stage41-instance-status.py --selftest
+          bash -n tools/gazelle-fel/run-stage41-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('tools/gazelle-fel/stage41-instance-status.py').read_text()
+          runner=Path('tools/gazelle-fel/run-stage41-macos.sh').read_text()
+          assert 'len(GATES)==25' in src
+          assert "'vdec_status':'/sys/class/vdec/vdec_status'" in src
+          assert 'READONLY_SYSFS_ATTR_PASS' in src
+          assert 'VISIBLE_STATUS_RECORDS_MAY_UNDERCOUNT_ALLOCATED_VDECS=YES' in src
+          assert 'GAZELLE_FEL_STAGE41_ORIGINAL_STATUS_OFFLINE_PASS' in src
+          assert '0388105f67e77b856a5bb9d34bfaf908b83df32e' in runner
+          for code in (src,runner):
+              for danger in ('logcat -c', 'setprop ', 'adb push', 'pm install',
+                             'insmod ', 'modprobe ', 'am force-stop'):
+                  assert danger not in code, danger
+          print('GAZELLE_FEL_STAGE41_SOURCE_SAFETY_PASS')
+          PY
           bash -n tools/gazelle-fel/run-stage40-macos.sh
           python3 - <<'PY'
           from pathlib import Path

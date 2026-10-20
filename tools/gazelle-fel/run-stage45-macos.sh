@@ -3,7 +3,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 CHECK="$HERE/audit-stage45-input-contract.py"
-CHECK_SHA="e9a7cd1778929528e92cb7b7da3beb0d897bdc1ccd9f160a961cd1e9077c2dac"
+CHECK_SHA="6b650fcd057109b03e30864118a25544605ba7085da50658373e30b7909ea10d"
 KODI_REF="a7046638a7ba7deb06c12f3a9ad4f05c85f5bacd"
 KODI_BLOB="1a313fdc297db69607b2a3f0e82069def4b198f3"
 OUT="$HOME/Downloads/gazelle-fel-stage45-results"

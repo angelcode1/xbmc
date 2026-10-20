@@ -263,7 +263,7 @@ jobs:
           from pathlib import Path
           v=Path('tools/gazelle-fel/audit-stage47-demux-contract.py').read_text()
           r=Path('tools/gazelle-fel/run-stage47-macos.sh').read_text()
-          assert 'a24c929eb142e0918e2c2973d7a94bc82ace340b' in r
+          assert '97a50d0cf4145fd57a035a578687f182f5fcfd3c' in r
           assert 'DEMUX_TIMESTAMP=PER_STREAM_TIME_BASE_TO_DVD_TIME_BASE_WITH_ORIGIN_NORMALIZATION' in v
           assert 'PLAYER_EL=ALTERNATE_UNSELECTED_STREAM_ROUTE_SKIPS_BL_CONTINUITY' in v
           assert 'GAZELLE_FEL_STAGE47_OFFLINE_PASS' in v

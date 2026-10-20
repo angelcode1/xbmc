@@ -68,7 +68,7 @@ def audit(folder):
       need("demux_pts_and_dts", "ConvertTimestamp(m_pkt.pkt.pts, stream->time_base.den, stream->time_base.num)" in read and "ConvertTimestamp(m_pkt.pkt.dts, stream->time_base.den, stream->time_base.num)" in read),
       need("packet_bl_el_roles", "pPacket->isDualStream = video->isDualStream;" in read and "pPacket->isELPackage = video->isELStream;" in read),
       need("stream_bl_el_hints", "st->isELStream = true;" in streams and "bl->isDualStream = true;" in streams),
-      need("stream_first_nondovi_candidate", "auto blIt = std::find_if(" in streams and bool(re.search(r'hdr_type\\s*!=\\s*StreamHdrType::HDR_TYPE_DOLBYVISION', streams))),
+      need("stream_first_nondovi_candidate", "auto blIt = std::find_if(" in streams and bool(re.search(r'hdr_type\s*!=\s*StreamHdrType::HDR_TYPE_DOLBYVISION', streams))),
       need("default_selection_skips_el", "if (video->isDualStream && video->isELStream)" in defaults and "continue;" in defaults),
       need("el_outside_current_selected_stream", re.search(r'else\s+if\s*\(pPacket->isELPackage\)',route) and "m_VideoPlayerVideo->SendMessage" in route),
       need("selected_bl_continuity", "CheckContinuity(m_CurrentVideo, pPacket)" in video and "UpdateTimestamps(m_CurrentVideo, pPacket)" in video),

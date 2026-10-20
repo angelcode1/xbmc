@@ -46,6 +46,7 @@ on:
       - tools/gazelle-fel/audit-stage46-p7-input-guards.py
       - tools/gazelle-fel/audit-stage47-demux-contract.py
       - tools/gazelle-fel/stage48-pairing-policy-core.py
+      - tools/gazelle-fel/run-stage48-macos.sh
       - docs/gazelle-fel-stage48-pair-identity-timeline-contract-20261020.md
       - tools/gazelle-fel/run-stage47-macos.sh
       - docs/gazelle-fel-stage47-demux-timestamp-routing-20261020.md
@@ -281,6 +282,7 @@ jobs:
           python3 tools/gazelle-fel/audit-stage47-demux-contract.py --source-dir "$RUNNER_TEMP/gazelle-stage47-sources"
           python3 -m py_compile tools/gazelle-fel/stage48-pairing-policy-core.py
           python3 tools/gazelle-fel/stage48-pairing-policy-core.py
+          bash -n tools/gazelle-fel/run-stage48-macos.sh
           python3 - <<'PY'
           import hashlib
           from pathlib import Path

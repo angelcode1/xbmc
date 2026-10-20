@@ -43,6 +43,9 @@ on:
       - tools/gazelle-fel/audit-stage43-connected-pair.py
       - tools/gazelle-fel/audit-stage44-native-abi-readiness.py
       - tools/gazelle-fel/audit-stage45-input-contract.py
+      - tools/gazelle-fel/audit-stage46-p7-input-guards.py
+      - tools/gazelle-fel/run-stage46-macos.sh
+      - docs/gazelle-fel-stage46-p7-pairing-buffer-guards-20261020.md
       - tools/gazelle-fel/run-stage45-macos.sh
       - docs/gazelle-fel-stage45-native-write-kodi-packet-pts-20261020.md
       - tools/gazelle-fel/run-stage44-research-checkout.sh
@@ -232,6 +235,24 @@ jobs:
           KODI="$RUNNER_TEMP/gazelle-fel-stage45-kodi.cpp"
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/angelcode1/xbmc/a7046638a7ba7deb06c12f3a9ad4f05c85f5bacd/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp" -o "$KODI"
           python3 tools/gazelle-fel/audit-stage45-input-contract.py --kodi-only --kodi "$KODI"
+          python3 -m py_compile tools/gazelle-fel/audit-stage46-p7-input-guards.py
+          bash -n tools/gazelle-fel/run-stage46-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          source=Path("tools/gazelle-fel/audit-stage46-p7-input-guards.py").read_bytes()
+          runner=Path("tools/gazelle-fel/run-stage46-macos.sh").read_text()
+          assert hashlib.sha256(source).hexdigest()=="ba942beda9cad95e6f9da043705305bf1a8d4673b380339064fa163ab15cb931"
+          assert "ba942beda9cad95e6f9da043705305bf1a8d4673b380339064fa163ab15cb931" in runner
+          assert "MODEL_INPUT_BUDGET=REJECT_WHOLE_OVERSIZE_ACCESS_UNIT_NEVER_TRUNCATE" in source.decode()
+          assert "GAZELLE_FEL_STAGE46_OFFLINE_PASS" in source.decode()
+          for code in (source.decode(),runner):
+              for unsafe in ('adb shell','adb push','setprop ','logcat -c','pm install','insmod ','modprobe ','am force-stop'):
+                  assert unsafe not in code,unsafe
+          print("GAZELLE_FEL_STAGE46_SOURCE_SAFETY_PASS")
+          PY
+          python3 tools/gazelle-fel/audit-stage46-p7-input-guards.py --selftest
+          python3 tools/gazelle-fel/audit-stage46-p7-input-guards.py --kodi "$KODI" --json "$RUNNER_TEMP/gazelle-stage46-source-model.json"
 
           bash -n tools/gazelle-fel/run-stage44-research-checkout.sh
           python3 - <<'PY'

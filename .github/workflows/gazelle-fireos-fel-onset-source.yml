@@ -37,6 +37,9 @@ on:
       - tools/gazelle-fel/audit-stage37-provider-bridge.py
       - tools/gazelle-fel/capture-stage38-provider-graph.py
       - tools/gazelle-fel/audit-stage39-provider-names.py
+      - tools/gazelle-fel/audit-stage40-pair-open-release.py
+      - tools/gazelle-fel/run-stage40-macos.sh
+      - docs/gazelle-fel-stage40-original-paired-open-lifecycle-20261020.md
       - tools/gazelle-fel/run-stage39-macos.sh
       - docs/gazelle-fel-stage39-original-provider-naming-20261020.md
       - docs/gazelle-fel-stage37-original-provider-callback-bridge-20261020.md
@@ -184,6 +187,23 @@ jobs:
           python3 tools/gazelle-fel/capture-stage38-provider-graph.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage39-provider-names.py
           python3 tools/gazelle-fel/audit-stage39-provider-names.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage40-pair-open-release.py
+          python3 tools/gazelle-fel/audit-stage40-pair-open-release.py --selftest
+          bash -n tools/gazelle-fel/run-stage40-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('tools/gazelle-fel/audit-stage40-pair-open-release.py').read_text()
+          runner=Path('tools/gazelle-fel/run-stage40-macos.sh').read_text()
+          assert '0x1650' in src and '0x16f0' in src and '0x1fc4' in src
+          assert 'STREAM_SECOND_CREATE_NULL=CHECKED_AND_OPEN_RETURNS_NEG_ENOMEM' in src
+          assert 'LIVE_P7_MASTER_SLAVE_POINTERS=NOT_MEASURED' in src
+          assert 'GAZELLE_FEL_STAGE40_OFFLINE_PASS' in src
+          assert '5e45e44e65001fafdfe7de938a5cb2b85d5eb935' in runner
+          for code in (src,runner):
+              for danger in ('adb shell', 'setprop ', 'logcat -c', 'pm install', 'insmod ', 'modprobe '):
+                  assert danger not in code,danger
+          print('GAZELLE_FEL_STAGE40_SOURCE_SAFETY_PASS')
+          PY
           bash -n tools/gazelle-fel/run-stage39-macos.sh
           python3 - <<'PY'
           from pathlib import Path

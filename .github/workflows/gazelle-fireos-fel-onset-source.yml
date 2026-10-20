@@ -39,6 +39,9 @@ on:
       - tools/gazelle-fel/audit-stage39-provider-names.py
       - tools/gazelle-fel/audit-stage40-pair-open-release.py
       - tools/gazelle-fel/stage41-instance-status.py
+      - tools/gazelle-fel/stage42-connected-core.py
+      - tools/gazelle-fel/run-stage42-macos.sh
+      - docs/gazelle-fel-stage42-connected-decoder-status-20261020.md
       - tools/gazelle-fel/run-stage41-macos.sh
       - docs/gazelle-fel-stage41-vdec-status-visibility-20261020.md
       - tools/gazelle-fel/run-stage40-macos.sh
@@ -194,6 +197,27 @@ jobs:
           python3 tools/gazelle-fel/audit-stage40-pair-open-release.py --selftest
           python3 -m py_compile tools/gazelle-fel/stage41-instance-status.py
           python3 tools/gazelle-fel/stage41-instance-status.py --selftest
+          python3 -m py_compile tools/gazelle-fel/stage42-connected-core.py
+          python3 tools/gazelle-fel/stage42-connected-core.py --selftest
+          bash -n tools/gazelle-fel/run-stage42-macos.sh
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          src=Path('tools/gazelle-fel/stage42-connected-core.py').read_bytes()
+          runner=Path('tools/gazelle-fel/run-stage42-macos.sh').read_text()
+          assert hashlib.sha256(src).hexdigest() == '424582bb1ccac54bba507ca14a15bce0866d0abcd37189c30f22af2d1a1b09bd'
+          assert '424582bb1ccac54bba507ca14a15bce0866d0abcd37189c30f22af2d1a1b09bd' in runner
+          txt=src.decode()
+          assert 'GAZELLE_FEL_STAGE42_ORIGINAL_CORE_OFFLINE_PASS' in txt
+          assert 'NONCONNECTED_ALLOCATED_INSTANCE=NOT_EXCLUDED' in txt
+          assert "'core':'/sys/class/vdec/core'" in txt
+          assert 'raw_kernel_addresses_retained' in txt
+          for value in (txt,runner):
+              for forbidden in ('logcat -c', 'setprop ', 'adb push', 'pm install',
+                                'insmod ', 'modprobe ', 'am force-stop'):
+                  assert forbidden not in value, forbidden
+          print('GAZELLE_FEL_STAGE42_SOURCE_SAFETY_PASS')
+          PY
           bash -n tools/gazelle-fel/run-stage41-macos.sh
           python3 - <<'PY'
           from pathlib import Path

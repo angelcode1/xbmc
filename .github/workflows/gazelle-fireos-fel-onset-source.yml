@@ -34,6 +34,9 @@ on:
       - tools/gazelle-fel/audit-stage34-hevc-register-bases.py
       - tools/gazelle-fel/audit-stage35-hevc-alias-consumers.py
       - tools/gazelle-fel/audit-stage36-meta-export-gates.py
+      - tools/gazelle-fel/audit-stage37-provider-bridge.py
+      - tools/gazelle-fel/run-stage37-macos.sh
+      - docs/gazelle-fel-stage37-original-provider-callback-bridge-20261020.md
       - tools/gazelle-fel/run-stage36-macos.sh
       - docs/gazelle-fel-stage36-original-aux-export-20261020.md
       - tools/gazelle-fel/run-stage35-macos.sh
@@ -168,6 +171,22 @@ jobs:
           python3 tools/gazelle-fel/audit-stage35-hevc-alias-consumers.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage36-meta-export-gates.py
           python3 tools/gazelle-fel/audit-stage36-meta-export-gates.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage37-provider-bridge.py
+          python3 tools/gazelle-fel/audit-stage37-provider-bridge.py --selftest
+          bash -n tools/gazelle-fel/run-stage37-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('tools/gazelle-fel/audit-stage37-provider-bridge.py').read_text()
+          runner=Path('tools/gazelle-fel/run-stage37-macos.sh').read_text()
+          assert 'SLOTS={0x3ba0:0x15608' in source
+          assert 'ORIGINAL_BUILTIN_VF_DISPATCH_AND_PROVIDER_ALIAS=NOT_VERIFIED' in source
+          assert 'P7_FEL_PIXEL_RECONSTRUCTION=NOT_PROVEN' in source
+          assert '2cea08d212ffb9d685a789389708cbcead6dfb86' in runner
+          for content in (source,runner):
+              for unsafe in ('adb shell','setprop ','logcat -c','pm install','insmod ','modprobe '):
+                  assert unsafe not in content, unsafe
+          print('GAZELLE_FEL_STAGE37_SOURCE_SAFETY_PASS')
+          PY
           bash -n tools/gazelle-fel/run-stage36-macos.sh
           python3 - <<'PY'
           from pathlib import Path

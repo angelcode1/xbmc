@@ -28,6 +28,9 @@ on:
       - tools/gazelle-fel/capture-stage28-active-comparison.py
       - tools/gazelle-fel/audit-stage29-live-gates.py
       - tools/gazelle-fel/audit-stage30-vendor-profile.py
+      - tools/gazelle-fel/audit-stage31-config-ack.py
+      - tools/gazelle-fel/run-stage31-macos.sh
+      - docs/gazelle-fel-stage31-original-hevc-config-ack-20261020.md
       - tools/gazelle-fel/extract-stage30-vendor.py
       - tools/gazelle-fel/run-stage30-macos.sh
       - docs/gazelle-fel-stage30-original-vendor-profile-gates-20261020.md
@@ -138,6 +141,18 @@ jobs:
           python3 tools/gazelle-fel/audit-stage29-live-gates.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage30-vendor-profile.py
           python3 tools/gazelle-fel/audit-stage30-vendor-profile.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage31-config-ack.py
+          python3 tools/gazelle-fel/audit-stage31-config-ack.py --selftest
+          bash -n tools/gazelle-fel/run-stage31-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          checker = Path("tools/gazelle-fel/audit-stage31-config-ack.py").read_text()
+          runner = Path("tools/gazelle-fel/run-stage31-macos.sh").read_text()
+          assert "GATES =" in checker and "CONFIG_IOCTL_RETURN_ERROR=LOGGED_BUT_HELPER_RETURNS_ZERO" in checker
+          assert "EXPECTED_BLOB=b8371b0b2a74590b5535c134a2b9347a7062e901" in runner
+          assert not any(token in runner for token in ("adb shell", "setprop ", "insmod ", "pm install", "logcat -c"))
+          print("GAZELLE_FEL_STAGE31_SOURCE_SAFETY_PASS")
+          PY
           python3 -m py_compile tools/gazelle-fel/extract-stage30-vendor.py
           bash -n tools/gazelle-fel/run-stage30-macos.sh
           python3 - <<'PY'

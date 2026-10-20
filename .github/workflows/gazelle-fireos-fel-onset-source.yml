@@ -32,6 +32,9 @@ on:
       - tools/gazelle-fel/capture-stage32-log-gates.py
       - tools/gazelle-fel/audit-stage33-original-hevc-config.py
       - tools/gazelle-fel/audit-stage34-hevc-register-bases.py
+      - tools/gazelle-fel/audit-stage35-hevc-alias-consumers.py
+      - tools/gazelle-fel/run-stage35-macos.sh
+      - docs/gazelle-fel-stage35-hevc-alias-and-debug-20261020.md
       - tools/gazelle-fel/run-stage34-macos.sh
       - docs/gazelle-fel-stage34-hevc-register-base-correction-20261020.md
        - tools/gazelle-fel/run-stage33-macos.sh
@@ -158,6 +161,22 @@ jobs:
           python3 tools/gazelle-fel/audit-stage33-original-hevc-config.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage34-hevc-register-bases.py
           python3 tools/gazelle-fel/audit-stage34-hevc-register-bases.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage35-hevc-alias-consumers.py
+          python3 tools/gazelle-fel/audit-stage35-hevc-alias-consumers.py --selftest
+          bash -n tools/gazelle-fel/run-stage35-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          v=Path('tools/gazelle-fel/audit-stage35-hevc-alias-consumers.py').read_text()
+          r=Path('tools/gazelle-fel/run-stage35-macos.sh').read_text()
+          assert 'shift_byte_count_lo' in v and 'discard_dv_data' in v
+          assert 'INDIRECT_OR_OTHER_REGISTER_CONSUMERS=NOT_EXCLUDED' in v
+          assert 'GAZELLE_FEL_STAGE35_ORIGINAL_HEVC_OFFLINE_PASS' in v
+          assert 'a4df61a9d9fb3d96ac309b8361cc6b7508dfa0e9' in r
+          for code in (v,r):
+              for bad in ('adb shell', 'setprop ', 'logcat -c', 'pm install', 'insmod ', 'modprobe '):
+                  assert bad not in code, bad
+          print('GAZELLE_FEL_STAGE35_SOURCE_SAFETY_PASS')
+          PY
           bash -n tools/gazelle-fel/run-stage34-macos.sh
           python3 - <<'PY'
           from pathlib import Path

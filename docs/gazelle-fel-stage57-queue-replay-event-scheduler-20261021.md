@@ -31,3 +31,18 @@ C++17 -Wall -Wextra -Werror builds passed, including ASan/UBSan and runner/ZIP C
 **Decision: NO-GO** for installed decoder patch. Preserve P8, voice satellite, HDMI passthrough, optical UDF/MMBD and existing Magisk. No global OMX toggles, raw ioctls or Blu-ray PID modifications. Native P7 residual reconstruction, active EL provider and output pixels remain unproven.
 
 **Stage58 next**: source-only ownership and clock normalization proof with an explicit in-flight JNI/MediaCodec submission fence. No production integration until that, safe producer/worker/barrier thread ownership and exact pair-binding provenance have been verified.
+
+## Stage57 v2 macOS runner repair (owner results, 21 October 2026)
+
+Owner's first `bash run_stage57_macos.sh --audit` produced all scheduler PASS markers, then failed before the source audit with `run_stage57_macos.sh: line 29: EXTRAS[@]: unbound variable`. **Root cause:** on macOS system Bash 3.2, `set -u` can treat a defined-but-empty `EXTRAS=()` expansion as unbound. This is a *host runner argument expansion bug*, not a C++ scheduler failure or a source audit failure.
+
+The corrected downloadable `gazelle-fel-stage57-queue-scheduler-v2.zip` has SHA-256 `1372ffa0d494683e450794a3a7be460d0930d2202394ef5440359628ee491c4f`. The runner now uses explicit `--audit` and `--offline-audit` branches instead of an empty Bash array. The original scheduler C++ and pinned source-audit Python files are byte-identical to Stage57 v1.
+
+Verified on the available host:
+- `bash -n`, Python compilation, internal file SHA-256 manifest, ZIP CRC: PASS;
+- real C++17 default runner and 7,560 bounded schedules: PASS, ZIP output valid;
+- real `--offline-audit` with deliberately missing sources: **reaches** Python source gate (`SOURCE_MISSING_OFFLINE DVDMessageQueue.cpp`), without the shell error;
+- both audit argument paths and resulting ZIP packaging: PASS **using a local mocked source-auditor** strictly for branch-routing tests. Mocked markers are not an original-source audit;
+- independently recorded original Kodi source gates from GitHub remain 23/23; full 14-file downloaded SHA-pinned Mac audit and actual macOS Bash 3.2 execution remain **PENDING**.
+
+Run a fresh unzip into `~/Downloads/gazelle-fel-stage57-queue-scheduler-v2/`, then `bash run_stage57_macos.sh --audit`. Required successful final messages: `GAZELLE_FEL_STAGE57_SOURCE_AUDIT_PASS files=14 stage55_gates=61 stage57_gates=23` and `GAZELLE_FEL_STAGE57_HOST_PASS schedules=7560 source_audited=true`. No device writes or Kodi patch were made. Runtime native P7 FEL output remains unproven.

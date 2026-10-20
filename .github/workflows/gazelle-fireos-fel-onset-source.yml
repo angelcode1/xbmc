@@ -40,6 +40,9 @@ on:
       - tools/gazelle-fel/audit-stage40-pair-open-release.py
       - tools/gazelle-fel/stage41-instance-status.py
       - tools/gazelle-fel/stage42-connected-core.py
+      - tools/gazelle-fel/audit-stage43-connected-pair.py
+      - tools/gazelle-fel/run-stage43-macos.sh
+      - docs/gazelle-fel-stage43-original-connected-list-reconciliation-20261020.md
       - tools/gazelle-fel/run-stage42-macos.sh
       - docs/gazelle-fel-stage42-connected-decoder-status-20261020.md
       - tools/gazelle-fel/run-stage41-macos.sh
@@ -199,6 +202,25 @@ jobs:
           python3 tools/gazelle-fel/stage41-instance-status.py --selftest
           python3 -m py_compile tools/gazelle-fel/stage42-connected-core.py
           python3 tools/gazelle-fel/stage42-connected-core.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage43-connected-pair.py
+          python3 tools/gazelle-fel/audit-stage43-connected-pair.py --selftest
+          bash -n tools/gazelle-fel/run-stage43-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          s=Path('tools/gazelle-fel/audit-stage43-connected-pair.py').read_bytes()
+          r=Path('tools/gazelle-fel/run-stage43-macos.sh').read_text()
+          assert hashlib.sha256(s).hexdigest() == 'd348e953fac3252df2459bfed0684162c6cefb71a75c6dd93579c5511b299990'
+          assert 'd348e953fac3252df2459bfed0684162c6cefb71a75c6dd93579c5511b299990' in r
+          text=s.decode()
+          assert 'CONNECT_AND_CORE_SHARE_SAME_VDEC_CORE_GLOBAL=YES' in text
+          assert 'P7_ADDITIONAL_CONNECTED_DECODER=NOT_OBSERVED_IN_3_OF_3_SAMPLES' in text
+          assert 'P7_FEL_PIXEL_RECONSTRUCTION=NOT_PROVEN' in text
+          for content in (text,r):
+              for unsafe in ('adb shell','setprop ','logcat -c','pm install','insmod ','modprobe ','am force-stop'):
+                  assert unsafe not in content, unsafe
+          print('GAZELLE_FEL_STAGE43_SOURCE_SAFETY_PASS')
+          PY
           bash -n tools/gazelle-fel/run-stage42-macos.sh
           python3 - <<'PY'
           import hashlib

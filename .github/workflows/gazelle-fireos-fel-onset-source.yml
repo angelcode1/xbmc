@@ -49,6 +49,8 @@ on:
       - tools/gazelle-fel/stage49-disc-track-gate.py
       - tools/gazelle-fel/stage50-bluray-el-admission-gate.py
       - tools/gazelle-fel/stage51-atomic-admission-core.py
+      - tools/gazelle-fel/stage52-stream-lifetime-core.py
+      - docs/gazelle-fel-stage52-stream-lifetime-observers-20261020.md
       - docs/gazelle-fel-stage51-atomic-admission-model-20261020.md
       - docs/gazelle-fel-stage50-disc-el-admission-20261020.md
       - docs/gazelle-fel-stage49-demux-owner-and-bluray-el-discard-20261020.md
@@ -295,6 +297,24 @@ jobs:
           python3 -m py_compile tools/gazelle-fel/stage51-atomic-admission-core.py
           python3 tools/gazelle-fel/stage51-atomic-admission-core.py --selftest
           python3 tools/gazelle-fel/stage51-atomic-admission-core.py --source-dir "$RUNNER_TEMP/gazelle-stage47-sources"
+          python3 -m py_compile tools/gazelle-fel/stage52-stream-lifetime-core.py
+          python3 tools/gazelle-fel/stage52-stream-lifetime-core.py --selftest
+          python3 tools/gazelle-fel/stage52-stream-lifetime-core.py --source-dir "$RUNNER_TEMP/gazelle-stage47-sources"
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('tools/gazelle-fel/stage52-stream-lifetime-core.py').read_text()
+          doc=Path('docs/gazelle-fel-stage52-stream-lifetime-observers-20261020.md').read_text()
+          for marker in ('GAZELLE_FEL_STAGE52_REPO_OFFLINE_PASS',
+                         'ORIGINAL_PAIR_METADATA_MUTATION_NO_VERSION_NOTIFY=CONFIRMED_CODE_PATH',
+                         'test_12_remove_el_revokes_bl'):
+              assert marker in src
+          assert '39 original Kodi source gates' in doc
+          assert '43 synthetic lifetime' in doc
+          for content in (src,doc):
+              for unsafe in ('adb shell','adb push','setprop ','logcat -c','pm install','insmod ','modprobe '):
+                  assert unsafe not in content,unsafe
+          print('GAZELLE_FEL_STAGE52_REPO_SOURCE_SAFETY_PASS')
+          PY
           python3 - <<'PY'
           from pathlib import Path
           src=Path('tools/gazelle-fel/stage51-atomic-admission-core.py').read_text()

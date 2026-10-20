@@ -47,6 +47,8 @@ on:
       - tools/gazelle-fel/audit-stage47-demux-contract.py
       - tools/gazelle-fel/stage48-pairing-policy-core.py
       - tools/gazelle-fel/stage49-disc-track-gate.py
+      - tools/gazelle-fel/stage50-bluray-el-admission-gate.py
+      - docs/gazelle-fel-stage50-disc-el-admission-20261020.md
       - docs/gazelle-fel-stage49-demux-owner-and-bluray-el-discard-20261020.md
       - tools/gazelle-fel/run-stage48-macos.sh
       - docs/gazelle-fel-stage48-pair-identity-timeline-contract-20261020.md
@@ -285,6 +287,21 @@ jobs:
           python3 -m py_compile tools/gazelle-fel/stage49-disc-track-gate.py
           python3 tools/gazelle-fel/stage49-disc-track-gate.py --selftest
           python3 tools/gazelle-fel/stage49-disc-track-gate.py --source-dir "$RUNNER_TEMP/gazelle-stage47-sources"
+          python3 -m py_compile tools/gazelle-fel/stage50-bluray-el-admission-gate.py
+          python3 tools/gazelle-fel/stage50-bluray-el-admission-gate.py --selftest
+          python3 tools/gazelle-fel/stage50-bluray-el-admission-gate.py --source-dir "$RUNNER_TEMP/gazelle-stage47-sources"
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('tools/gazelle-fel/stage50-bluray-el-admission-gate.py').read_text()
+          doc=Path('docs/gazelle-fel-stage50-disc-el-admission-20261020.md').read_text()
+          for marker in ('GAZELLE_FEL_STAGE50_REPO_OFFLINE_PASS','BLOCK_EL_DECODER','DISC_NAV_LANGUAGE_DEFAULT_DUPLICATE_HANDLING'):
+              assert marker in src
+          assert 'not been observed' in doc
+          for data in (src,doc):
+              for danger in ('adb shell','setprop ', 'logcat -c', 'pm install','insmod ', 'modprobe '):
+                  assert danger not in data,danger
+          print('GAZELLE_FEL_STAGE50_REPO_SOURCE_SAFETY_PASS')
+          PY
           python3 - <<'PY'
           from pathlib import Path
           src=Path('tools/gazelle-fel/stage49-disc-track-gate.py').read_text()

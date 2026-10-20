@@ -31,7 +31,10 @@ on:
       - tools/gazelle-fel/audit-stage31-config-ack.py
       - tools/gazelle-fel/capture-stage32-log-gates.py
       - tools/gazelle-fel/audit-stage33-original-hevc-config.py
-      - tools/gazelle-fel/run-stage33-macos.sh
+      - tools/gazelle-fel/audit-stage34-hevc-register-bases.py
+      - tools/gazelle-fel/run-stage34-macos.sh
+      - docs/gazelle-fel-stage34-hevc-register-base-correction-20261020.md
+       - tools/gazelle-fel/run-stage33-macos.sh
       - docs/gazelle-fel-stage33-hevc-config-precedence-20261020.md
       - tools/gazelle-fel/run-stage32-macos.sh
       - docs/gazelle-fel-stage32-passive-ioctl-log-compare-20261020.md
@@ -153,6 +156,22 @@ jobs:
           python3 tools/gazelle-fel/capture-stage32-log-gates.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage33-original-hevc-config.py
           python3 tools/gazelle-fel/audit-stage33-original-hevc-config.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage34-hevc-register-bases.py
+          python3 tools/gazelle-fel/audit-stage34-hevc-register-bases.py --selftest
+          bash -n tools/gazelle-fel/run-stage34-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          v=Path('tools/gazelle-fel/audit-stage34-hevc-register-bases.py').read_text()
+          r=Path('tools/gazelle-fel/run-stage34-macos.sh').read_text()
+          assert 'discard_dv_data' in v and 'ip_mode' in v and 'dv_duallayer' in v
+          assert "ISR_0xa548_READS=hevc_state_s.ip_mode" in v
+          assert "GAZELLE_FEL_STAGE34_OFFLINE_PASS" in v
+          assert "59cfd9b5093024754706996100081ecf59c7e675" in r
+          for s in (v,r):
+              for dangerous in ('adb shell', 'setprop ', 'logcat -c', 'pm install', 'insmod ', 'modprobe '):
+                  assert dangerous not in s, dangerous
+          print('GAZELLE_FEL_STAGE34_SOURCE_SAFETY_PASS')
+          PY
           bash -n tools/gazelle-fel/run-stage33-macos.sh
           python3 - <<'PY'
           from pathlib import Path

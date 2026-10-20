@@ -50,6 +50,8 @@ on:
       - tools/gazelle-fel/stage50-bluray-el-admission-gate.py
       - tools/gazelle-fel/stage51-atomic-admission-core.py
       - tools/gazelle-fel/stage52-stream-lifetime-core.py
+      - tools/gazelle-fel/stage53-queue-generation-core.py
+      - docs/gazelle-fel-stage53-streamchange-generation-20261020.md
       - docs/gazelle-fel-stage52-stream-lifetime-observers-20261020.md
       - docs/gazelle-fel-stage51-atomic-admission-model-20261020.md
       - docs/gazelle-fel-stage50-disc-el-admission-20261020.md
@@ -300,6 +302,22 @@ jobs:
           python3 -m py_compile tools/gazelle-fel/stage52-stream-lifetime-core.py
           python3 tools/gazelle-fel/stage52-stream-lifetime-core.py --selftest
           python3 tools/gazelle-fel/stage52-stream-lifetime-core.py --source-dir "$RUNNER_TEMP/gazelle-stage47-sources"
+          python3 -m py_compile tools/gazelle-fel/stage53-queue-generation-core.py
+          python3 tools/gazelle-fel/stage53-queue-generation-core.py --selftest
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/angelcode1/xbmc/a7046638a7ba7deb06c12f3a9ad4f05c85f5bacd/xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp" -o "$RUNNER_TEMP/gazelle-stage47-sources/VideoPlayerVideo.cpp"
+          python3 tools/gazelle-fel/stage53-queue-generation-core.py --source-dir "$RUNNER_TEMP/gazelle-stage47-sources"
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('tools/gazelle-fel/stage53-queue-generation-core.py').read_text()
+          doc=Path('docs/gazelle-fel-stage53-streamchange-generation-20261020.md').read_text()
+          for name in ('GAZELLE_FEL_STAGE53_REPO_OFFLINE_PASS','CODEC_RECONFIGURE_REUSES_WITH_NO_EXPLICIT_PENDING_HALF_CLEAR','test_half_cannot_cross_epochs'):
+              assert name in src
+          assert '43 deterministic synthetic' in doc and '20 additional worker gates' in doc
+          for content in (src,doc):
+              for bad in ('adb shell','adb push','setprop ','logcat -c','pm install','insmod ','modprobe '):
+                  assert bad not in content,bad
+          print('GAZELLE_FEL_STAGE53_REPO_SOURCE_SAFETY_PASS')
+          PY
           python3 - <<'PY'
           from pathlib import Path
           src=Path('tools/gazelle-fel/stage52-stream-lifetime-core.py').read_text()

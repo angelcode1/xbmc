@@ -83,3 +83,21 @@ The research branch also contains a smaller independently source-pinned reposito
 4. Require native pair creation, EL decoding, RPU metadata and **residual-sensitive pixel evidence** before calling P7 FEL working.
 
 Existing P8 Dolby path, Magisk, HDMI/audio passthrough, voice satellite, UDF/MMBD and installed Kodi stay unchanged.
+
+## Stage49 macOS Python 3.9 compatibility correction
+
+The first user-run `gazelle-fel-stage49-macos.zip` terminated before tests with `TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'` at `dvd_pid:int|None`. That is a Python annotation syntax/runtime compatibility issue (PEP 604 unions need Python 3.10+), **not a kernel, Kodi, or original-source audit failure**.
+
+The corrected **standalone conversation ZIP** is `gazelle-fel-stage49-macos-py39-fixed.zip`, SHA-256 `6e3fd626a64e76e0b69c48c1ff784d12c02284ee09560bbacc7c7f935206b937`. Its source replaces the three annotations with `typing.Optional[int]` or `typing.Optional[Track]`. Source SHA-256 is `7c716b966f1bf7354f8395275f13dca52500c5c3829186b8cb0299041dd4604e` and the bundled runner verifies that updated SHA before execution.
+
+The corrected source passed Python 3.9 grammar parsing, 20 synthetic regression tests, 22 exact pinned-Kodi-source checks, ZIP CRC, shell syntax, and a full offline runner replay. The exact original Kodi Git blob pins and all FEL interpretation limits are unchanged. The original research-branch repository gate `stage49-disc-track-gate.py` is independent of the bundle's extended Python script and passed source-only GitHub CI.
+
+Owner Mac instructions:
+
+```bash
+cd ~/Downloads
+unzip -o gazelle-fel-stage49-macos-py39-fixed.zip -d ~/Downloads
+bash ~/Downloads/gazelle-fel-stage49-macos/run-stage49-macos.sh
+```
+
+Expected `GAZELLE_FEL_STAGE49_OFFLINE_PASS source_gates=22 regressions=20`. No Cube access.

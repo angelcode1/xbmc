@@ -1,3 +1,5 @@
+> **CORRECTION — Stage 34, 2026-10-20:** The original HEVC DWARF and address-base audit established that Stage 33's `negative_dv` configuration write targets the field actually named `hevc_state_s.discard_dv_data` at offset `0x10a88`. The cited ISR read at `0xa548` uses a *different register base* and reads `hevc_state_s.ip_mode` at `0x10a58`. Furthermore, `x25` is rebased to a `.bss` relocation on a later ISR path; the `0xc568` write cannot be equated with the probe's `discard_dv_data` write. **Withdraw the Stage 33 claim that the same private flag is read/written at these ISR sites.** The three key names, bit override and probe writes remain verified. See [Stage 34](gazelle-fel-stage34-hevc-register-base-correction-20261020.md).
+
 # Gazelle FEL Stage 33 — original HEVC configuration keys and override precedence
 
 **2026-10-20. Original Amazon module static audit: PASS. Runtime P7 cause and FEL pixels: NOT PROVEN.**

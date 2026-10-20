@@ -36,6 +36,10 @@ on:
       - tools/gazelle-fel/audit-stage36-meta-export-gates.py
       - tools/gazelle-fel/audit-stage37-provider-bridge.py
       - tools/gazelle-fel/capture-stage38-provider-graph.py
+      - tools/gazelle-fel/audit-stage39-provider-names.py
+      - tools/gazelle-fel/run-stage39-macos.sh
+      - docs/gazelle-fel-stage39-original-provider-naming-20261020.md
+      - docs/gazelle-fel-stage37-original-provider-callback-bridge-20261020.md
       - tools/gazelle-fel/run-stage38-macos.sh
       - docs/gazelle-fel-stage38-vfm-provider-graph-20261020.md
       - tools/gazelle-fel/run-stage37-macos.sh
@@ -178,6 +182,24 @@ jobs:
           python3 tools/gazelle-fel/audit-stage37-provider-bridge.py --selftest
           python3 -m py_compile tools/gazelle-fel/capture-stage38-provider-graph.py
           python3 tools/gazelle-fel/capture-stage38-provider-graph.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage39-provider-names.py
+          python3 tools/gazelle-fel/audit-stage39-provider-names.py --selftest
+          bash -n tools/gazelle-fel/run-stage39-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('tools/gazelle-fel/audit-stage39-provider-names.py').read_text()
+          runner=Path('tools/gazelle-fel/run-stage39-macos.sh').read_text()
+          assert "len(GATES)==44" in source
+          assert "'is_stream_mode_dv_multi'" in source
+          assert "dv_toggle_prov_name" in source
+          assert "GAZELLE_FEL_STAGE39_OFFLINE_PASS" in source
+          assert "2889aca4532a04bb9627332accc30c3b04e549b6" in runner
+          for code in (source,runner):
+              for dangerous in ('adb shell', 'setprop ', 'logcat -c',
+                                'pm install', 'insmod ', 'modprobe '):
+                  assert dangerous not in code, dangerous
+          print('GAZELLE_FEL_STAGE39_SOURCE_SAFETY_PASS')
+          PY
           bash -n tools/gazelle-fel/run-stage38-macos.sh
           python3 - <<'PY'
           from pathlib import Path

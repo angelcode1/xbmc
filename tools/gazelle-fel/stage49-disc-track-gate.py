@@ -52,7 +52,7 @@ def verify_source(s):
     assert 'm_VideoPlayerVideo->SendMessage' in player[fallback:fallback+400]
     assert 'UpdateCorrection(packet, m_offset_pts);' in player
     m=decoder.index('auto other = std::find_if(')
-    pred=decoder[m:m+500]
+    pred=decoder[m:decoder.index('if (other == m_doviLayerPackets.end())',m)]
     assert 'return pending.isEL != packet.isELPackage;' in pred
     assert 'pending.pts' not in pred and 'packet.pts' not in pred
     assert 'iSize = out_size;' in decoder

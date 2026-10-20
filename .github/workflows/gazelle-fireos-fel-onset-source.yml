@@ -220,8 +220,8 @@ jobs:
           from pathlib import Path
           script=Path('tools/gazelle-fel/audit-stage45-input-contract.py').read_bytes()
           runner=Path('tools/gazelle-fel/run-stage45-macos.sh').read_text()
-          assert hashlib.sha256(script).hexdigest() == 'e9a7cd1778929528e92cb7b7da3beb0d897bdc1ccd9f160a961cd1e9077c2dac'
-          assert 'e9a7cd1778929528e92cb7b7da3beb0d897bdc1ccd9f160a961cd1e9077c2dac' in runner
+          assert hashlib.sha256(script).hexdigest() == '6b650fcd057109b03e30864118a25544605ba7085da50658373e30b7909ea10d'
+          assert '6b650fcd057109b03e30864118a25544605ba7085da50658373e30b7909ea10d' in runner
           assert 'GAZELLE_FEL_STAGE45_OFFLINE_PASS' in script.decode()
           assert 'KODI_P7_LAYER_MATCH=OPPOSITE_LAYER_ONLY_NO_TIMESTAMP_PREDICATE' in script.decode()
           for code in (script.decode(),runner):

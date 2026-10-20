@@ -48,7 +48,7 @@ def audit(folder):
     read=between(demux,"DemuxPacket* CDVDDemuxFFmpeg::ReadInternal(",
                  "DemuxPacket* CDVDDemuxFFmpeg::Read()",20000)
     streams=between(demux,"// Dolby Vision dual-track support.",
-                    "sideData = av_packet_side_data_get(pStream->codecpar->coded_side_data,",9000)
+                    "if (!st->isDualStream && st->hdr_type == StreamHdrType::HDR_TYPE_DOLBYVISION)",9000)
     defaults=between(player,"void CVideoPlayer::OpenDefaultStreams(",
                      "// open audio stream",4500)
     route=between(player,"void CVideoPlayer::ProcessPacket(",

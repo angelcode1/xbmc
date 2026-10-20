@@ -33,6 +33,9 @@ on:
       - tools/gazelle-fel/audit-stage33-original-hevc-config.py
       - tools/gazelle-fel/audit-stage34-hevc-register-bases.py
       - tools/gazelle-fel/audit-stage35-hevc-alias-consumers.py
+      - tools/gazelle-fel/audit-stage36-meta-export-gates.py
+      - tools/gazelle-fel/run-stage36-macos.sh
+      - docs/gazelle-fel-stage36-original-aux-export-20261020.md
       - tools/gazelle-fel/run-stage35-macos.sh
       - docs/gazelle-fel-stage35-hevc-alias-and-debug-20261020.md
       - tools/gazelle-fel/run-stage34-macos.sh
@@ -163,6 +166,22 @@ jobs:
           python3 tools/gazelle-fel/audit-stage34-hevc-register-bases.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage35-hevc-alias-consumers.py
           python3 tools/gazelle-fel/audit-stage35-hevc-alias-consumers.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage36-meta-export-gates.py
+          python3 tools/gazelle-fel/audit-stage36-meta-export-gates.py --selftest
+          bash -n tools/gazelle-fel/run-stage36-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path("tools/gazelle-fel/audit-stage36-meta-export-gates.py").read_text()
+          run=Path("tools/gazelle-fel/run-stage36-macos.sh").read_text()
+          assert "GAZELLE_FEL_STAGE36_ORIGINAL_HEVC_OFFLINE_PASS" in src
+          assert "INDIRECT_OR_FIRMWARE_SIDE_FLAG_EFFECT=NOT_EXCLUDED" in src
+          assert "EVENT_CALLBACK=DEFAULTS_AUX_PTR_SIZE_ZERO" in src
+          assert "5172e475f2e1f93cfbe640b7b693527d68b2c7f5" in run
+          for code in (src,run):
+              for bad in ("adb shell", "setprop ", "logcat -c", "pm install", "insmod ", "modprobe "):
+                  assert bad not in code, bad
+          print("GAZELLE_FEL_STAGE36_SOURCE_SAFETY_PASS")
+          PY
           bash -n tools/gazelle-fel/run-stage35-macos.sh
           python3 - <<'PY'
           from pathlib import Path

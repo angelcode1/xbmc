@@ -29,6 +29,9 @@ on:
       - tools/gazelle-fel/audit-stage29-live-gates.py
       - tools/gazelle-fel/audit-stage30-vendor-profile.py
       - tools/gazelle-fel/audit-stage31-config-ack.py
+      - tools/gazelle-fel/capture-stage32-log-gates.py
+      - tools/gazelle-fel/run-stage32-macos.sh
+      - docs/gazelle-fel-stage32-passive-ioctl-log-compare-20261020.md
       - tools/gazelle-fel/run-stage31-macos.sh
       - docs/gazelle-fel-stage31-original-hevc-config-ack-20261020.md
       - tools/gazelle-fel/extract-stage30-vendor.py
@@ -143,6 +146,23 @@ jobs:
           python3 tools/gazelle-fel/audit-stage30-vendor-profile.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage31-config-ack.py
           python3 tools/gazelle-fel/audit-stage31-config-ack.py --selftest
+          python3 -m py_compile tools/gazelle-fel/capture-stage32-log-gates.py
+          python3 tools/gazelle-fel/capture-stage32-log-gates.py --selftest
+          bash -n tools/gazelle-fel/run-stage32-macos.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          c = Path('tools/gazelle-fel/capture-stage32-log-gates.py').read_text()
+          r = Path('tools/gazelle-fel/run-stage32-macos.sh').read_text()
+          assert 'MAX_WINDOW=75' in c and 'MAX_EVENTS=120' in c
+          assert 'DEVICE_WRITES=NONE' in c and 'RAW_LOG_MESSAGES_STORED=NO' in c
+          assert "CONFIG_301_UNSUPPORTED" in c and "CONFIG_301_IOCTL_FAILURE" in c
+          assert "72f61d2258ee4bc94159e78236fe9059ded61548" in r
+          for code in (c, r):
+              for bad in ('logcat -c', 'setprop ', 'adb push', 'pm install',
+                          'insmod ', 'modprobe ', 'am force-stop'):
+                  assert bad not in code, bad
+          print('GAZELLE_FEL_STAGE32_SOURCE_SAFETY_PASS')
+          PY
           bash -n tools/gazelle-fel/run-stage31-macos.sh
           python3 - <<'PY'
           from pathlib import Path

@@ -42,6 +42,7 @@ on:
       - tools/gazelle-fel/stage42-connected-core.py
       - tools/gazelle-fel/audit-stage43-connected-pair.py
       - tools/gazelle-fel/audit-stage44-native-abi-readiness.py
+      - tools/gazelle-fel/run-stage44-research-checkout.sh
       - docs/gazelle-fel-stage44-native-stream-readiness-20261020.md
       - tools/gazelle-fel/run-stage43-macos.sh
       - docs/gazelle-fel-stage43-original-connected-list-reconciliation-20261020.md
@@ -208,6 +209,7 @@ jobs:
           python3 tools/gazelle-fel/audit-stage43-connected-pair.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage44-native-abi-readiness.py
           python3 tools/gazelle-fel/audit-stage44-native-abi-readiness.py --selftest
+          bash -n tools/gazelle-fel/run-stage44-research-checkout.sh
           python3 - <<'PY'
           from pathlib import Path
           src=Path('tools/gazelle-fel/audit-stage44-native-abi-readiness.py').read_text()

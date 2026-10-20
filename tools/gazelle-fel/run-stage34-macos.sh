@@ -13,7 +13,7 @@ from pathlib import Path
 import hashlib,sys,zipfile
 src=Path(sys.argv[1]).read_bytes()
 blob=hashlib.sha1(b'blob '+str(len(src)).encode()+b'\0'+src).hexdigest()
-EXPECTED_SCRIPT='TO_REPLACE_WITH_BUNDLED_SCRIPT_BLOB'
+EXPECTED_SCRIPT='59cfd9b5093024754706996100081ecf59c7e675'
 if blob!=EXPECTED_SCRIPT:raise SystemExit('GAZELLE_STAGE34_SCRIPT_SHA_MISMATCH '+blob)
 print('GAZELLE_FEL_STAGE34_SCRIPT_PIN_PASS')
 zipfile_path=Path(sys.argv[2]).expanduser()

@@ -46,6 +46,8 @@ on:
       - tools/gazelle-fel/audit-stage46-p7-input-guards.py
       - tools/gazelle-fel/audit-stage47-demux-contract.py
       - tools/gazelle-fel/stage48-pairing-policy-core.py
+      - tools/gazelle-fel/stage49-disc-track-gate.py
+      - docs/gazelle-fel-stage49-demux-owner-and-bluray-el-discard-20261020.md
       - tools/gazelle-fel/run-stage48-macos.sh
       - docs/gazelle-fel-stage48-pair-identity-timeline-contract-20261020.md
       - tools/gazelle-fel/run-stage47-macos.sh
@@ -280,6 +282,21 @@ jobs:
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/angelcode1/xbmc/a7046638a7ba7deb06c12f3a9ad4f05c85f5bacd/xbmc/cores/VideoPlayer/DVDDemuxers/DVDDemuxFFmpeg.cpp" -o "$RUNNER_TEMP/gazelle-stage47-sources/DVDDemuxFFmpeg.cpp"
           curl -fsSL --retry 3 "https://raw.githubusercontent.com/angelcode1/xbmc/a7046638a7ba7deb06c12f3a9ad4f05c85f5bacd/xbmc/cores/VideoPlayer/VideoPlayer.cpp" -o "$RUNNER_TEMP/gazelle-stage47-sources/VideoPlayer.cpp"
           python3 tools/gazelle-fel/audit-stage47-demux-contract.py --source-dir "$RUNNER_TEMP/gazelle-stage47-sources"
+          python3 -m py_compile tools/gazelle-fel/stage49-disc-track-gate.py
+          python3 tools/gazelle-fel/stage49-disc-track-gate.py --selftest
+          python3 tools/gazelle-fel/stage49-disc-track-gate.py --source-dir "$RUNNER_TEMP/gazelle-stage47-sources"
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('tools/gazelle-fel/stage49-disc-track-gate.py').read_text()
+          report=Path('docs/gazelle-fel-stage49-demux-owner-and-bluray-el-discard-20261020.md').read_text()
+          assert 'GAZELLE_FEL_STAGE49_REPO_OFFLINE_PASS' in src
+          assert 'CONDITIONAL_DISC_EL_PID_0X1015_IS_DISCARDED=YES' in src
+          assert 'HAVE_LIBBLURAY' in report and 'AVDISCARD_ALL' in report
+          for text in (src,report):
+              for danger in ('adb shell','setprop ', 'logcat -c', 'pm install', 'insmod ', 'modprobe '):
+                  assert danger not in text,danger
+          print('GAZELLE_FEL_STAGE49_REPO_SOURCE_SAFETY_PASS')
+          PY
           python3 -m py_compile tools/gazelle-fel/stage48-pairing-policy-core.py
           python3 tools/gazelle-fel/stage48-pairing-policy-core.py
           bash -n tools/gazelle-fel/run-stage48-macos.sh

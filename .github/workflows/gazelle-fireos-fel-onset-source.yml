@@ -41,6 +41,8 @@ on:
       - tools/gazelle-fel/stage41-instance-status.py
       - tools/gazelle-fel/stage42-connected-core.py
       - tools/gazelle-fel/audit-stage43-connected-pair.py
+      - tools/gazelle-fel/audit-stage44-native-abi-readiness.py
+      - docs/gazelle-fel-stage44-native-stream-readiness-20261020.md
       - tools/gazelle-fel/run-stage43-macos.sh
       - docs/gazelle-fel-stage43-original-connected-list-reconciliation-20261020.md
       - tools/gazelle-fel/run-stage42-macos.sh
@@ -204,6 +206,23 @@ jobs:
           python3 tools/gazelle-fel/stage42-connected-core.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage43-connected-pair.py
           python3 tools/gazelle-fel/audit-stage43-connected-pair.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage44-native-abi-readiness.py
+          python3 tools/gazelle-fel/audit-stage44-native-abi-readiness.py --selftest
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('tools/gazelle-fel/audit-stage44-native-abi-readiness.py').read_text()
+          doc=Path('docs/gazelle-fel-stage44-native-stream-readiness-20261020.md').read_text()
+          assert "sum(map(len,GATES.values()))==39" in src
+          assert "NATIVE_CONTEXT_MIN_EXTENT=0x12c4_NOT_COMPLETE_STRUCT_SIZE" in src
+          assert "NATIVE_STREAM_BACKEND_IMPL=BLOCKED_NO_SAFE_RUNTIME_TEST" in src
+          assert "P7_FEL_PIXEL_RECONSTRUCTION=NOT_PROVEN" in src
+          assert "Owner's Stage 43 uploaded report" in doc
+          for payload in (src,doc):
+              for danger in ("adb shell", "setprop ", "logcat -c", "pm install",
+                             "insmod ", "modprobe ", "am force-stop"):
+                  assert danger not in payload,danger
+          print('GAZELLE_FEL_STAGE44_SOURCE_SAFETY_PASS')
+          PY
           bash -n tools/gazelle-fel/run-stage43-macos.sh
           python3 - <<'PY'
           from pathlib import Path

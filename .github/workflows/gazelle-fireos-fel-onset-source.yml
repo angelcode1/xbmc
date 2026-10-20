@@ -42,6 +42,9 @@ on:
       - tools/gazelle-fel/stage42-connected-core.py
       - tools/gazelle-fel/audit-stage43-connected-pair.py
       - tools/gazelle-fel/audit-stage44-native-abi-readiness.py
+      - tools/gazelle-fel/audit-stage45-input-contract.py
+      - tools/gazelle-fel/run-stage45-macos.sh
+      - docs/gazelle-fel-stage45-native-write-kodi-packet-pts-20261020.md
       - tools/gazelle-fel/run-stage44-research-checkout.sh
       - docs/gazelle-fel-stage44-native-stream-readiness-20261020.md
       - tools/gazelle-fel/run-stage43-macos.sh
@@ -209,6 +212,27 @@ jobs:
           python3 tools/gazelle-fel/audit-stage43-connected-pair.py --selftest
           python3 -m py_compile tools/gazelle-fel/audit-stage44-native-abi-readiness.py
           python3 tools/gazelle-fel/audit-stage44-native-abi-readiness.py --selftest
+          python3 -m py_compile tools/gazelle-fel/audit-stage45-input-contract.py
+          python3 tools/gazelle-fel/audit-stage45-input-contract.py --selftest
+          bash -n tools/gazelle-fel/run-stage45-macos.sh
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          script=Path('tools/gazelle-fel/audit-stage45-input-contract.py').read_bytes()
+          runner=Path('tools/gazelle-fel/run-stage45-macos.sh').read_text()
+          assert hashlib.sha256(script).hexdigest() == 'e9a7cd1778929528e92cb7b7da3beb0d897bdc1ccd9f160a961cd1e9077c2dac'
+          assert 'e9a7cd1778929528e92cb7b7da3beb0d897bdc1ccd9f160a961cd1e9077c2dac' in runner
+          assert 'GAZELLE_FEL_STAGE45_OFFLINE_PASS' in script.decode()
+          assert 'KODI_P7_LAYER_MATCH=OPPOSITE_LAYER_ONLY_NO_TIMESTAMP_PREDICATE' in script.decode()
+          for code in (script.decode(),runner):
+              for unsafe in ('adb shell','setprop ','logcat -c','pm install','insmod ','modprobe ','am force-stop'):
+                  assert unsafe not in code,unsafe
+          print('GAZELLE_FEL_STAGE45_SOURCE_SAFETY_PASS')
+          PY
+          KODI="$RUNNER_TEMP/gazelle-fel-stage45-kodi.cpp"
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/angelcode1/xbmc/a7046638a7ba7deb06c12f3a9ad4f05c85f5bacd/xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp" -o "$KODI"
+          python3 tools/gazelle-fel/audit-stage45-input-contract.py --kodi-only --kodi "$KODI"
+
           bash -n tools/gazelle-fel/run-stage44-research-checkout.sh
           python3 - <<'PY'
           from pathlib import Path

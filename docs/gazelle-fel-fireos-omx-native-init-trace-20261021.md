@@ -99,3 +99,13 @@ This was verified **offline against the exact owner-provided 32-bit ARM /vendor/
 
 
 **Additional constraint on reachability:** The original legacy `AmlogicVideoDecoder` constructor writes zero to byte `this+0xdc` (`0x1de7c`). The `stream_mode` property checks run *only* if that byte is later nonzero. A static search of direct stores to that byte found no straightforward legacy Dolby subclass setter; indirect or framework writes remain possible. Therefore the properties are a **candidate gate**, not a proven working toggle for the active Dolby session. P7's observed frame device cannot by itself establish which assignment produced frame mode. Record actual `getprop` values before considering any changes. Do **not** claim a one-property FEL fix.
+
+## Owner properties unset; inherited Awesome setup sources the input-mode flags
+
+Read-only owner result on Fire OS: `vendor.media.omx.stream_mode` is unset and `media.omx.stream_mode` is unset. These match the default (false) property reads in `AmlogicVideoDecoder::intitalizeCodec()`. **No property writes are authorized or recommended.**
+
+**Correction to initial constructor-only analysis:** the proprietary legacy Dolby decoder constructor calls the `AmlogicVideoDecoderAwesome` constructor (class inherits that implementation); `AmlogicVideoDecoderAwesome::setUp()` has direct instruction sequence at virtual addresses `0x2612a-0x26138` that reads `[this+4]+0x109` and `[this+4]+0x10a` and assigns them respectively to `this+0xdc` and `this+0xdd`. So although base `AmlogicVideoDecoder` constructor clears `this+0xdc` at `0x1de7c`, it **does not establish that the byte is always zero at codec initialization**. The source of the vendor configuration bytes and their actual runtime values in this owner's P7 session remain unverified; the two system properties are gated on these inputs.
+
+The previously traced `intitalizeCodec()` mode-value conversion `this+0xdd=1 => codec_para_t+0x10a0=1` (frame) and otherwise `this+0xdc!=0 => codec_para_t+0x10a0=2` (stream) is supported by instruction sequence `0x1efb6-0x1efd2`; a property alone might leave the existing `this+0xdd` value set and therefore **does not guarantee switching to stream**. The owner has directly observed frame mode in `media.codec` with P7. Only a traced vendor parameter setter or a purpose-built isolated codec experiment could close this gap.
+
+**Updated gate:** investigate who populates `[this+4]+0x109/+0x10a` from OMX/native input-mode requests and whether the legacy Dolby class can use its stream backend with Android surface output. No Kodi queue patches, no global property changes, no module loading or stream-port swaps on these data.

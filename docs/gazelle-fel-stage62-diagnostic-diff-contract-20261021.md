@@ -14,7 +14,7 @@ The P7-only instrumentation maintains local `session` and `ticket` counters; tho
 
 ## Stage62 standalone offline package
 
-Downloadable conversation artifact `gazelle-fel-stage62-review.zip`, SHA-256 `d449d9ba7cd6cd02b29fb140e010f561632968ec1424bbdb6b52c17a1a8e66a4`. Contains a fail-closed owner Stage61 ZIP auditor, exact source-diff generator dependencies, isolated C++17 scoped semantics model, nine adversarial archive-mutation tests, Mac Bash 3.2-safe runner, original owner-generated **review-only** diff, reports, and SHA-256 manifest.
+Downloadable conversation artifact `gazelle-fel-stage62-review.zip`, SHA-256 `78d8aad9102199eb2e10dfe45d931544fb877651966011f2370570eb901133d4`. Contains a fail-closed owner Stage61 ZIP auditor, exact source-diff generator dependencies, isolated C++17 scoped semantics model, nine adversarial archive-mutation tests, Mac Bash 3.2-safe runner, original owner-generated **review-only** diff, reports, and SHA-256 manifest.
 
 Verified locally:
 
@@ -28,7 +28,7 @@ Verified locally:
 
 The **full Stage62 `--audit` is still PENDING on the user's Mac**. It must read the owner's already-cached 14 original Kodi source files at immutable commit `a7046638a7ba7deb06c12f3a9ad4f05c85f5bacd`, confirm actual Git blob hashes, regenerate the owner's diff **byte-for-byte**, stage copies of the original codec .cpp/.h in an isolated temporary directory, `git apply --check`, apply, reverse and compare the restored copies. It must not alter the Kodi checkout. The current host has no direct access to these original source files, though the Stage61 owner's Mac full audit already passed.
 
-Run on Mac with `gazelle-fel-stage61-results.zip` and cached original Kodi files retained:
+Run on Mac with the Stage61 runner's output ZIP in `~/Downloads/gazelle-fel-stage61-results/` (or a flat copy under `~/Downloads`) and cached original Kodi files retained:
 
 ```bash
 cd ~/Downloads

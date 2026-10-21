@@ -147,3 +147,35 @@ done
 ```
 
 The literal properties are **read-only**. Do **not** use `setprop` or `echo > /sys` while the normal MediaCodec stack is in use. If a reversible prototype is ever justified, isolate it from production playback and require confirmed complete rollback and actual BL/EL decoder state. No native FEL function is proven here.
+
+
+## Owner frame-DV capability and explicit true gate — Dolby subclass reaches Awesome mode branch
+
+Owner read-only Fire OS (2026-10-21) reports:
+```text
+vendor.media.omx.use_dv_frame = true
+media.omx.multi_mode =
+media.omx.single_mode =
+media.omx.drm_framemode =
+vdec_common:vdec;
+vdec_input:drm_framemode;
+hevc:8k, 8bit, 10bit, dwrite, compressed, frame_dv, fence, v4l-uvm;
+h265:8k, 8bit, 10bit, dwrite, compressed, frame_dv, fence, v4l-uvm;
+mh265:8k, 8bit, 10bit, dwrite, compressed, frame_dv, fence, v4l-uvm;
+```
+Other profiles such as `mh264` and `av1` also advertise `frame_dv`; this is a vendor capability token, **not** advertised Profile7 FEL support. Empty properties are unset, not necessarily meaning auto-detected feature flags are disabled.
+
+### Verified vendor code-chain implications
+
+- `libomx_framework_alt.so` `OmxVideoDecoder` constructor at `0x16622–0x16650` checks the string `frame_dv` in `/sys/class/amstream/vcodec_profile`; if found, calls `property_get_bool("vendor.media.omx.use_dv_frame", false)` and stores the result into framework byte **`+0x10b`**. Owner has **`true`** for this property.
+- `libOmxVideo.so` `AmlogicVideoDecoderDolbyVision::doCodecSpec()` virtual override at **`0x30948–0x309b0`** delegates via a resolved vendor linker veneer **`0x66b54`** to **`AmlogicVideoDecoderAwesome::doCodecSpec()`** (`0x27f80`) for the normal non-AV1 path. The alternate veneer **`0x66b44`** invokes `AmlogicVideoDecoderAv1::doCodecSpec()` when its AV1 code path is selected. The veneer targets were traced to distinct `.rel.plt` entries (index 321 and 443) and exact exported symbol addresses. This confirms the **registered legacy Dolby decoder genuinely reaches the Awesome HEVC-specific mode branch** when its guards permit, not just inheriting an unrelated unused method.
+- In `Awesome::doCodecSpec()`, at **`0x2833c–0x2834e`** additional source/state flags are checked and `codec_para_t+0x18` is compared against **0xb (11)**. For the matching format, control branches to **`0x287c0–0x287e4`**, reading the framework **`+0x10b`** byte and selecting codec input mode **1 (frame)** if nonzero, otherwise **2 (stream)** into `codec_para_t+0x10a0`. The owner's `vdec_init ... format: 11` is consistent with the HEVC case, but does **not independently authenticate the precise user-space guard outcomes**.
+- Existing run-time read-only capture showed the actual Fire OS MediaCodec using `/dev/amstream_dves_hevc_frame` and kernel port type **0x1d11**. That port bit10 bypasses the `stream_input.ko` paired decoder constructor. Together, this is a **specific, likely root-cause chain for the missing secondary decoder**.
+- The `Awesome::doCodecSpec` route also has checks on session/parser state bytes `+0x35c/+0x35d`; whether the P7 AU encountered those conditions is not verified. This is a **strong static explanation** of observed frame mode, **not proof** that switching the single property results in a functioning native second decoder.
+- Previous owner evidence: P7 MediaCodec selects `OMX.amlogic.dolby-vision.dvhe.decoder`, post-conversion NALs include BL, EL and RPU with 27/27 input-copy checks equal; kernel reports dual-layer indication but only one VDEC and HDR10 output. CoreELEC actively runs two synchronized HEVC VDECs. These observations continue to delimit the issue.
+
+### Decision
+
+**Do not globally set `vendor.media.omx.use_dv_frame=false`** or alter `media.omx.stream_mode` on production Fire OS. The property applies across OMX components; changing the frame/stream input protocol without preserving buffer ownership, timing, Surface/V4L, FENCE and Dolby pipeline can break P8 and non-Kodi playback or destabilize media services. A property-only change would also not establish that `dv_duallayer:1` is appended (that separate branch checks an unresolved internal format `0x10`), nor that FEL reconstruction and HDMI output work.
+
+**Next worthwhile work:** offline trace the exact per-session guard flags and the native stream decoder's output and Dolby handoff, followed by an *isolated*, opt-in, reversible codec experiment only if those contracts align. If they cannot be aligned, stop the native Fire OS attempt rather than building more Kodi buffering models.

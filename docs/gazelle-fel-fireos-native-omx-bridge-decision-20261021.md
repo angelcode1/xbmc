@@ -1,3 +1,5 @@
+> **2026-10-21 correction / superseded conclusion:** The original document's claim that Kodi/Android has no usable vendor-extension bridge was too strong. New offline tracing shows Fire OS `ACodec::setVendorParameters` and the Amlogic `OMX_IndexConfigAndroidVendorExtension` bridge reaching `OMX.amlogic.index.profileLevel` (`0x7f00010d`) through Android `MediaFormat` candidate keys `vendor.profile-level.n-profile` and `vendor.profile-level.n-level`. See [component-scoped bridge design](gazelle-p7-fel-scoped-mediacodec-vendor-bridge-20261021.md). No successful live request or FEL playback has yet been demonstrated; the frame-vs-stream backend issue remains. Global property change is still discouraged.
+
 # Gazelle P7 FEL under Fire OS — native OMX bridge decision
 **21 October 2026 — offline binary analysis only. No changes to device, Kodi, Magisk, kernel, system properties, or hardware buffers.**
 

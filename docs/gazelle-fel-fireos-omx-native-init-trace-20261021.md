@@ -179,3 +179,31 @@ Other profiles such as `mh264` and `av1` also advertise `frame_dv`; this is a ve
 **Do not globally set `vendor.media.omx.use_dv_frame=false`** or alter `media.omx.stream_mode` on production Fire OS. The property applies across OMX components; changing the frame/stream input protocol without preserving buffer ownership, timing, Surface/V4L, FENCE and Dolby pipeline can break P8 and non-Kodi playback or destabilize media services. A property-only change would also not establish that `dv_duallayer:1` is appended (that separate branch checks an unresolved internal format `0x10`), nor that FEL reconstruction and HDMI output work.
 
 **Next worthwhile work:** offline trace the exact per-session guard flags and the native stream decoder's output and Dolby handoff, followed by an *isolated*, opt-in, reversible codec experiment only if those contracts align. If they cannot be aligned, stop the native Fire OS attempt rather than building more Kodi buffering models.
+
+
+## Native late-mode reconfiguration: RPU-pattern detection, codec close/reopen, and distinct Dolby profile fields
+
+**Additional verified offline tracing (21 October 2026):** against the immutable Fire OS `libOmxVideo.so` SHA-256 `eb79f44c3b327e140ef0faedaab3b82ce7ed2f9bf0531fb4b28c532feef90e77` and `libomx_framework_alt.so` SHA-256 `fc63dd4be1267e1798fea1f742b60e7ea6a35790a57198efc09c5de0a409baba`. No device or runtime modifications.
+
+### The late-mode selector is tied to in-band NAL inspection
+
+- The **actual Dolby Vision legacy override**, `AmlogicVideoDecoderDolbyVision::doCodecSpec` at `0x30948–0x309b0`, delegates the HEVC case to `AmlogicVideoDecoderAwesome::doCodecSpec` at `0x27f80`.
+- Within `Awesome::doCodecSpec` at **`0x282de–0x28326`**, code scans the current packet bytes for **`00 00 00 01 7c 01 19`**, i.e. an HEVC NAL-type-62/RPU-like prefix with an additional payload byte condition. If found, it sets the native one-shot observation flag at **`this+0x316`**. The owner's Kodi NAL counters prove type-62 presence, but they do **not** prove this *exact* seven-byte sequence was present in a vendor-parsed packet or that the scan executed.
+- Around **`0x2832a–0x2834e`**, the code checks either that one-shot flag or framework `+0x35c`, requires `+0x35d == 0`, and then checks underlying codec format `0x0b`. These are actual control-flow conditions, not just strings.
+- The framework constructor clears `+0x35d` at **`0x163c0`** and a vendor OMX `setParameter` branch at **`0x193ae–0x193d0`** can later set it from a caller-provided argument. The framework also sets `+0x35c` conditionally in its constructor (`0x16902`, `0x1695e`); owner session values are not measured.
+- At **`0x287c0–0x287e4`**, this late path writes input mode **1 (frame) or 2 (stream)** into `codec_para_t+0x10a0`, based on framework **`+0x10b`** (sourced from `vendor.media.omx.use_dv_frame`, owner reports `true`).
+- At **`0x287e6–0x287fe`**, it **also writes the mode to the associated video-output object's `+0x18`, calls the decoder virtual method at vtable offset `+0xc4`, and invokes `codec_reset()`**. The latter call is at `0x287fa` through ARM veneer `0x65b84` → PLT `0x1ae74` → `codec_reset`. Verified independent PLT/GOT binding, not merely the function name in source.
+- Actual bundled implementation `codec_reset` at **`0x59b44–0x59bd8`** calls **`codec_close`** (`0x59b90` via PLT) and **`codec_init`** (`0x59b9e` via PLT), with error-handling branches. Thus a late-mode switch may **tear down/reopen the native input device**, not just change a property or set an innocuous decoder flag. It is coupled to the video-output object state.
+
+### Independent dual-layer configuration condition remains unresolved
+
+- The legacy base decoder `AmlogicVideoDecoder::setUp()` appends exact `dv_duallayer:1;` bytes only when framework field `[this+4]+0x20 == 0x10` at **`0x21ac6–0x21afe`**. This is independent of the frame/stream mode selector.
+- Separately, `libomx_framework_alt.so` handles an OMX parameter labeled **`OMX_IndexParamVideoDolbyVision`** at **`0x18fdc–0x19004`**, storing its profile and level at **`this+0x36c`** and **`this+0x370`**, not at `+0x20`. The framework also has a different `setParameter` branch at **`0x19488–0x194a8`** copying caller data to `+0x20/+0x24`; its exact relevant index/call history for the owner P7 session remains unconfirmed.
+- Hence **`use_dv_frame=false` cannot be assumed sufficient for native dual-layer**: a potentially reachable stream port and a valid stream payload do not automatically establish the required private `dv_duallayer:1;` config. Importantly, **do not equate private OMX `+0x20==0x10` with Android `DolbyVisionProfileDvheDtb=128`** without tracing its producer.
+- User's Kodi logs show `MediaFormat has_profile_key=false`, `capability_filter_profile=0`, and advertised Android profiles `16,32,256` (P7 not advertised). These logs do **not** expose the native `+0x20` or `+0x36c` state.
+
+### Updated engineering assessment
+
+The Fire OS vendor code supports a **late in-band conditionally triggered native close/reopen** between frame and stream modes, and this change also touches the output video object. This is a more complex coupled contract than a static initialization choice. The existing property `vendor.media.omx.use_dv_frame=true` strongly explains the observed frame port but is **not** a proven safe per-Kodi switch, nor is the stream-mode route proven to create the secondary HEVC decoder when `dv_duallayer` is not enabled.
+
+**Do not recommend global `setprop`, manual port substitution, kernel ioctls, module changes or installed Kodi patching on this evidence.** The last useful path is a component-scoped, isolated vendor-OMX implementation experiment **only after** validating the framework's `+0x20` writer and the stream input's timestamp/presentation handshake. If unsupported, classify true P7 FEL on Fire OS as a major native decoder/rendering port, not an available one-bit workaround.

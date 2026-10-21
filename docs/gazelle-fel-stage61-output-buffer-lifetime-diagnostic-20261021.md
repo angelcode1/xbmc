@@ -47,3 +47,11 @@ Expected **only after a real network-backed source audit**:
 ## Decision
 
 **Runtime FEL implementation remains NO-GO.** Native P7 enhancement-layer decoder and residual contribution, BL/EL corrected timeline, authenticated codec/renderer retirement and playback safety remain unproven. Keep working P8, HDMI audio passthrough, voice satellite and UDF/MMBD unchanged. A source-only diagnostic diff is not a tested or authorized Kodi patch.
+
+## Owner Stage61 full Mac audit accepted (21 October 2026)
+
+Owner submitted `gazelle-fel-stage61-results.zip` with SHA-256 `505d8f380a15af10fe9eb42536c4132f91bd91744a1e3c3fa84223ec299eed40`. The ZIP contained eight readable members, passed CRC, and reported 14 immutable original Git blob SHA pins, all **210 inherited/new source predicates** (Stage55 61, Stage57 23, Stage58 29, Stage59 29, Stage60 37, Stage61 31) with zero failed checks. It included `GAZELLE_FEL_STAGE61_SOURCE_AUDIT_PASS`, 15 targeted cases, 2,048 synthetic cases, and the complete P7 diagnostic review diff plus `STAGE61_DIAGNOSTIC_DIFF_PASS original_files=14`.
+
+The **actual owner-generated patch has 11 unified diff hunks, 97 added lines and 1 removed line**; the `hunks=10` marker belongs only to Stage61's synthetic fixture test. Stage61's reviewed patch changes two Kodi source files, not the actual installed binary. The archive explicitly reports `kodi_diff_production_compiled=false`, `device_access=false`, `runtime_installed=false`, `native_fel_proven=false`.
+
+Stage61 is accepted as **host/source-audit PASS**, not a C++ build or runtime-decode PASS. Continue with the [Stage62 review](gazelle-fel-stage62-diagnostic-diff-contract-20261021.md) before considering any further instrumentation.

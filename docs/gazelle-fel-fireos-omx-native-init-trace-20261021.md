@@ -109,3 +109,41 @@ Read-only owner result on Fire OS: `vendor.media.omx.stream_mode` is unset and `
 The previously traced `intitalizeCodec()` mode-value conversion `this+0xdd=1 => codec_para_t+0x10a0=1` (frame) and otherwise `this+0xdc!=0 => codec_para_t+0x10a0=2` (stream) is supported by instruction sequence `0x1efb6-0x1efd2`; a property alone might leave the existing `this+0xdd` value set and therefore **does not guarantee switching to stream**. The owner has directly observed frame mode in `media.codec` with P7. Only a traced vendor parameter setter or a purpose-built isolated codec experiment could close this gap.
 
 **Updated gate:** investigate who populates `[this+4]+0x109/+0x10a` from OMX/native input-mode requests and whether the legacy Dolby class can use its stream backend with Android surface output. No Kodi queue patches, no global property changes, no module loading or stream-port swaps on these data.
+
+
+## Framework producer of vendor OMX mode bytes resolved
+
+**New offline finding (owner's original `/vendor/lib/libomx_framework_alt.so`, SHA-256 `fc63dd4be1267e1798fea1f742b60e7ea6a35790a57198efc09c5de0a409baba`):** the previously unresolved private OMX fields `[this+4]+0x109/+0x10a` are authored in the companion **`android::OmxVideoDecoder` constructor**, not solely inside `libOmxVideo.so`. The original ELF retains symbol `android::OmxVideoDecoder::OmxVideoDecoder(char const*, VendorPeerComponent&, ...)` at Thumb `0x162e0`, and executable instructions below were verified with `llvm-objdump`, PC-relative literal addresses resolved to exact strings.
+
+| Producer instruction in `libomx_framework_alt.so` | Direct meaning |
+| --- | --- |
+| `0x163d4` | Initialize four consecutive mode/config bytes at object `+0x109` to zero |
+| `0x16556–0x16572` | Parse `/sys/class/amstream/vcodec_profile` for `mh264:`; when found set `object+0x109=1` |
+| `0x16622–0x16650` | Detect `frame_dv` in video codec profile; read **`vendor.media.omx.use_dv_frame`** (default 0), store resulting flag at **`object+0x10b`** |
+| `0x166c2–0x16704` | Read `media.omx.multi_mode` and parse decimal override, followed by conditional per-codec multi-mode eligibility at `0x16704–0x16780` |
+| `0x16730–0x16780` | Consult `media.omx.single_mode` and sometimes clear `object+0x109` |
+| `0x167dc–0x16834` | If multi mode is enabled and codec is among supported family, log **`Use frame mode for multidec.`** and set `object+0x10a=1` |
+| `0x16838–0x16888` | Read `media.omx.stream_mode` (already confirmed unset in owner's Fire OS), and under its parsed true condition clear `object+0x10a` |
+| `0x1688c–0x16900` | Other properties and framebuffer behavior (`media.omx.min_buf`) |
+| `0x2834e → 0x287c0–0x287e4` in `libOmxVideo.so` | **Secondary later branch:** for internal codec format **0xb**, `AmlogicVideoDecoderAwesome::doCodecSpec()` reads **`[this+4]+0x10b`**, resets local `this+0xdd`, then updates `codec_para_t+0x10a0` (1 if flag set, else 2). This is conditional during codec-specific processing; not proven executed in owner's P7 session. |
+| `0x2612c–0x26138` in `libOmxVideo.so` | `AmlogicVideoDecoderAwesome::setUp()` copies shared framework mode bytes `+0x109/+0x10a` into native instance `+0xdc/+0xdd`. |
+| `0x1ef7a–0x1efd2` in `libOmxVideo.so` | Native `intitalizeCodec()` uses mode bytes plus properties `vendor.media.omx.stream_mode` and `media.omx.stream_mode` to choose stream-vs-frame input parameter. |
+
+### Corrected interpretation
+
+This establishes **the complete source of the initial native mode bits** across two original vendor libraries. In particular, the Android OMX framework itself can force frame mode for multidecoder use; the later native code also reads the mode fields and may force frame mode again when the two previously unset properties are false. The vendor's `frame_dv` profile capability and `vendor.media.omx.use_dv_frame` feed an *additional* byte `+0x10b`, so it is **incorrect** to say the existing two properties are the only relevant controls.
+
+**Important limits:** exact P7 runtime multi-mode flags are still unknown; class constructor branches may be gated on codec type and `vcodec_profile` contents. The exact per-stream object and config chain have **not** been sampled live. The original `libOmxVideo.so` is 32-bit ARM, linked through `libomx_framework_alt.so`; pointer `this+4` is a shared framework-provided configuration object. Executable branches are not proof they were reached in the measured P7 session. The later `+0x10b` path may execute only on a specific parser/reconfiguration event. Replacing device path or globally enabling a property still has unknown input and surface timing implications.
+
+### Minimal read-only owner evidence to resolve remaining flags
+
+```sh
+ADB="$(command -v adb)"
+for key in vendor.media.omx.use_dv_frame media.omx.multi_mode media.omx.single_mode media.omx.drm_framemode media.omx.stream_mode vendor.media.omx.stream_mode; do
+  printf '%s = ' "$key"
+  "$ADB" shell getprop "$key" | tr -d '\r'
+done
+"$ADB" shell "cat /sys/class/amstream/vcodec_profile" 2>&1 | grep -E '(^|[[:space:]])(mh264:|h265|frame_dv|vdec_common|no_single)' | head -n 30
+```
+
+The literal properties are **read-only**. Do **not** use `setprop` or `echo > /sys` while the normal MediaCodec stack is in use. If a reversible prototype is ever justified, isolate it from production playback and require confirmed complete rollback and actual BL/EL decoder state. No native FEL function is proven here.

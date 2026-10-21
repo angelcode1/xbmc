@@ -97,3 +97,5 @@ This was verified **offline against the exact owner-provided 32-bit ARM /vendor/
 
 **Stopping rule:** if an isolated vendor path cannot preserve the Android surface/renderer contract while opening both native decoders, classify Fire OS FEL as a major native player pipeline port and suspend the native approach. No more Kodi packet queue stages.
 
+
+**Additional constraint on reachability:** The original legacy `AmlogicVideoDecoder` constructor writes zero to byte `this+0xdc` (`0x1de7c`). The `stream_mode` property checks run *only* if that byte is later nonzero. A static search of direct stores to that byte found no straightforward legacy Dolby subclass setter; indirect or framework writes remain possible. Therefore the properties are a **candidate gate**, not a proven working toggle for the active Dolby session. P7's observed frame device cannot by itself establish which assignment produced frame mode. Record actual `getprop` values before considering any changes. Do **not** claim a one-property FEL fix.

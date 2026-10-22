@@ -651,7 +651,6 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
   uint32_t offset = 0;
   uint32_t size_eos = 0;
   uint8_t* buf = nullptr;
-  uint8_t* end = nullptr;
   uint8_t* start = nullptr;
   uint8_t* buf_eos = nullptr;
 
@@ -710,57 +709,40 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
     return false;
   }
 
-  // Base layer first.
+  // Base layer first. The same validated reader provides the source NAL
+  // boundaries during assembly; code cannot accidentally advance by a
+  // rewritten output length.
   start = buf;
-  end = buf + bl_frame_nal_buf_size;
-  while (end - buf > lengthBytes)
+  GazelleFEL::LengthPrefixedReader blReader(buf, bl_frame_nal_buf_size, lengthBytes);
+  GazelleFEL::NalSpan nal;
+  while (blReader.Next(nal))
   {
-    uint32_t size = 0;
-    for (unsigned i = 0; i < lengthBytes; ++i)
-      size = (size << 8) | buf[i];
-    buf += lengthBytes;
-    if (size == 0 || buf + size > end)
-      break;
-
-    const uint8_t nal_type = (buf[0] >> 1) & 0x3f;
+    const uint8_t nal_type = nal.type;
     if (nal_type != AVC_NAL_END_SEQUENCE)
-      BitstreamAllocAndCopy(&m_convertBuffer, &offset, buf, size, nal_type);
+      BitstreamAllocAndCopy(&m_convertBuffer, &offset, nal.data, nal.bytes, nal_type);
     else
     {
-      buf_eos = buf;
-      size_eos = size;
+      buf_eos = nal.data;
+      size_eos = nal.bytes;
     }
 
     CLog::Log(LOGDEBUG, LOGVIDEO,
-              "CBitstreamConverter::ConvertFEL BL nal_type:{} size:{}", nal_type, size);
-    buf += size;
+              "CBitstreamConverter::ConvertFEL BL nal_type:{} size:{}", nal_type, nal.bytes);
   }
 
-  if (m_convert_bitstream)
-    buf = pData_el;
-
-  // Enhancement layer. RPU stays NAL 62. Other EL NALs are presented to
-  // the Amlogic Dolby decoder as NAL 63, matching the CoreELEC path.
-  end = buf + el_frame_nal_buf_size;
-  while (end - buf > lengthBytes)
+  // Enhancement layer. RPU stays NAL 62; other EL NALs use NAL 63.
+  // Reader progression depends solely on source bytes, not on the length
+  // of an RPU rewritten by libdovi.
+  GazelleFEL::LengthPrefixedReader elReader(elStart, el_frame_nal_buf_size, lengthBytes);
+  while (elReader.Next(nal))
   {
-    uint32_t size = 0;
-    for (unsigned i = 0; i < lengthBytes; ++i)
-      size = (size << 8) | buf[i];
-    buf += lengthBytes;
-    if (size == 0 || buf + size > end)
-      break;
-
-    // processDoviRpu() can change the serialized RPU's OUTPUT length.
-    // The source NAL still consumes its ORIGINAL number of input bytes.
-    const uint32_t inputNalSize = size;
-    const uint8_t nal_type = (buf[0] >> 1) & 0x3f;
-
+    uint32_t size = nal.bytes;
+    const uint8_t nal_type = nal.type;
     if (nal_type == HEVC_NAL_UNSPEC62)
     {
-      const uint8_t* rpu_ptr = buf;
+      const uint8_t* rpu_ptr = nal.data;
 #ifdef HAVE_LIBDOVI
-      const DoviData* rpu_data = processDoviRpu(buf, size);
+      const DoviData* rpu_data = processDoviRpu(nal.data, size);
       if (rpu_data)
       {
         rpu_ptr = rpu_data->data;
@@ -776,15 +758,13 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
     }
     else if (!m_convert_dovi)
     {
-      BitstreamAllocAndCopy(&m_convertBuffer, &offset, buf, size,
+      BitstreamAllocAndCopy(&m_convertBuffer, &offset, nal.data, size,
                             HEVC_NAL_UNSPEC63);
     }
 
     if (!m_convert_dovi || nal_type == HEVC_NAL_UNSPEC62)
       CLog::Log(LOGDEBUG, LOGVIDEO,
                 "CBitstreamConverter::ConvertFEL EL nal_type:{} size:{}", nal_type, size);
-
-    buf += inputNalSize;
   }
 
   if (buf_eos)

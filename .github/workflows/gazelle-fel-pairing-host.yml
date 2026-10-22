@@ -11,6 +11,7 @@ on:
       - xbmc/utils/GazelleFELNalReader.h
       - xbmc/utils/BitstreamConverter.cpp
       - tests/TestGazelleFELNalReader.cpp
+      - tools/gazelle-fel/verify-kodi-fel-source-integration.py
       - .github/workflows/gazelle-fel-pairing-host.yml
   workflow_dispatch:
 
@@ -23,6 +24,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Verify real Kodi P7 source wiring
+        run: |
+          set -euo pipefail
+          python3 tools/gazelle-fel/verify-kodi-fel-source-integration.py --selftest
+          python3 tools/gazelle-fel/verify-kodi-fel-source-integration.py
       - name: Compile and test pairing helper
         run: |
           set -euo pipefail

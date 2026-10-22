@@ -86,7 +86,7 @@ def validate(contents):
         tail = ad[cap:cap + 900]
         if 'm_hints.dovi.dv_profile == 7' not in tail or 'return false;' not in tail:
             errors.append('decoder: P7 oversized packet might be truncated')
-    if not re.search(r'reader\.Next\(nal\)', contents['converter']):
+    if not (('blReader.Next(nal)' in contents['converter']) and ('elReader.Next(nal)' in contents['converter'])):
         errors.append('converter: reader traversal missing')
     return errors
 

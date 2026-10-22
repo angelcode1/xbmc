@@ -84,6 +84,20 @@ jobs:
           test -f tools/android/packaging/gazelle/native/libmmbd.so
           echo GAZELLE_KERNEL_UDF_SOURCE_PASS
 
+      - name: Research FEL P7 source integration gate
+        if: github.ref_name == 'research/gazelle-fireos-fel-20261019'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/gazelle-fel/verify-kodi-fel-source-integration.py
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELPairing.cpp -o /tmp/gazelle-fel-pair
+          /tmp/gazelle-fel-pair
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELNalReader.cpp -o /tmp/gazelle-fel-nal
+          /tmp/gazelle-fel-nal
+          echo "GAZELLE_FEL_ANDROID_RESEARCH_PREFLIGHT_PASS git_sha=${GITHUB_SHA} devices_touched=false fel_decode=false"
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:

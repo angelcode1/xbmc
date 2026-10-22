@@ -751,6 +751,9 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
     if (size == 0 || buf + size > end)
       break;
 
+    // processDoviRpu() can change the serialized RPU's OUTPUT length.
+    // The source NAL still consumes its ORIGINAL number of input bytes.
+    const uint32_t inputNalSize = size;
     const uint8_t nal_type = (buf[0] >> 1) & 0x3f;
 
     if (nal_type == HEVC_NAL_UNSPEC62)
@@ -781,7 +784,7 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
       CLog::Log(LOGDEBUG, LOGVIDEO,
                 "CBitstreamConverter::ConvertFEL EL nal_type:{} size:{}", nal_type, size);
 
-    buf += size;
+    buf += inputNalSize;
   }
 
   if (buf_eos)

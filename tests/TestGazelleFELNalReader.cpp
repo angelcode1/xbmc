@@ -47,6 +47,18 @@ static void Verify(unsigned width)
     oversized[i] = 0xff;
   LengthPrefixedReader badbig(oversized.data(), oversized.size(), width);
   assert(!badbig.Next(n) && !badbig.Complete());
+
+  // RPU output is allowed to change size. The next source NAL must still be
+  // found at its original input boundary (not the rewritten output length).
+  auto rpuFirst = data;
+  rpuFirst[width] = static_cast<uint8_t>(62 << 1);
+  rpuFirst[width + 3 + width] = static_cast<uint8_t>(1 << 1);
+  LengthPrefixedReader unchangedInput(rpuFirst.data(), rpuFirst.size(), width);
+  assert(unchangedInput.Next(n) && n.type == 62);
+  const unsigned rewrittenRpuOutputBytes = n.bytes + 20;
+  assert(rewrittenRpuOutputBytes != n.bytes);
+  assert(unchangedInput.Next(n) && n.type == 1 && n.bytes == 3);
+  assert(!unchangedInput.Next(n) && unchangedInput.Complete());
 }
 
 int main()

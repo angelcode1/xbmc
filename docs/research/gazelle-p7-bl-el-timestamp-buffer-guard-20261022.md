@@ -34,3 +34,13 @@ No Android Kodi compile or device playback verification was performed, and this 
 The actual Fire TV Cube 3rd generation has a compiled Dolby `enable_fel` flag, HEVC BL/EL picture association, and native `vdec_create` master/slave mechanism. However its read-only live profile 7 playback evidence had **one BL decoder, no EL decoder**, with grey instead of white credits; current idle decoder global flags are zero. Merely feeding correctly paired NAL63 and NAL62 to the stock Android Surface decoder will not activate FEL residual reconstruction. The API28 no-Surface Main10 test exposed only 8-bit YUV420_888, so there is no verified 10-bit CPU pipeline substitute.
 
 A working end-to-end FEL implementation additionally needs a per-session isolated paired native HEVC input, real EL decoding, frame binding, RPU interpretation, output ownership and fence-safe Dolby display. No deployed patch or visual FEL success is claimed.
+
+## Owner Mac validation — 22 October 2026
+
+Owner executed `CXX=clang++ GAZELLE_RUN_SANITIZERS=1 sh tools/run_tests.sh` from the no-Git source-only bundle and reported exactly:
+
+```text
+GAZELLE_FEL_P7_PAIRING_HOST_PASS timestamps=true bounds=true device=false FEL_decode=false
+```
+
+This confirms that the standalone C++ timestamp/bounds tests run on the owner's host; it does **not** prove Kodi Android compiles, the patched Kotlin/Java/MediaCodec path runs on FireOS, dual VDEC starts or FEL pixels are reconstructed. No APK deployed or Cube settings changed as part of this gate.

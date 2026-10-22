@@ -1,0 +1,29 @@
+name: Gazelle FEL P7 pairing host gate
+
+on:
+  push:
+    branches:
+      - research/gazelle-fireos-fel-20261019
+    paths:
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPairing.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp
+      - tests/TestGazelleFELPairing.cpp
+      - .github/workflows/gazelle-fel-pairing-host.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pair-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and test pairing helper
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELPairing.cpp -o /tmp/gazelle-fel-pair
+          /tmp/gazelle-fel-pair
+          echo 'GAZELLE_FEL_P7_PAIRING_HOST_PASS timestamps=true bounds=true device=false FEL_decode=false'

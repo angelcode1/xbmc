@@ -62,3 +62,16 @@ python3 tools/gazelle-fel/audit-stage18-native-layout.py /private/path/libOmxVid
 ```
 
 **Next gate:** audit all writes/reads around `config`/`config_len` and the codec initialization order, then reconcile the original vendor constructor and packet feeding structures with the native codec context. Keep any P7-only stream backend on a separate experimental branch, default off, until those exact ABI conditions and teardown can be proved.
+
+## 22 October 2026 correction — constructor's exact 0x12c8 allocation proven
+
+The original Stage18 conclusion that the largest accessed field at `+0x12c0` establishes only a **minimum extent `0x12c4`** was correct at that time. New SHA-verified analysis of the **same original** `libOmxVideo.so` (SHA-256 `eb79f44c3b327e140ef0faedaab3b82ce7ed2f9bf0531fb4b28c532feef90e77`) has now resolved the actual original **`AmlogicVideoDecoder::AmlogicVideoDecoder()` allocation**:
+
+- `0x1ddd0`: loads 0x12c8 (4,808 bytes); `0x1dde8` BL via veneer `0x65934` / PLT calls `_Znwj` (C++ operator new unsigned int);
+- `0x1ddec`: stores pointer in native decoder `+0x190`;
+- `0x1ddfa–0x1ddfe`: loads the same 0x12c8 and invokes `__aeabi_memclr` via veneer `0x65944`;
+- destructor `0x1e13e–0x1e15a`: null-checks the stored pointer, conditionally calls `codec_close` (veneer `0x659d4`), invokes `_ZdlPv` (operator delete, veneer `0x659e4`) and clears decoder `+0x190`.
+
+This **supersedes only the unknown total allocation size**. The original 40 logger-derived field names and offsets remain intact. The 4,808 bytes are the real allocation/clear size inside this vendor constructor, not an invitation to fabricate an external `codec_para_t` C struct, bypass its constructor, or call `codec_init` from Kodi. Nested allocations, proper parameters, output Surface/V4L/UVM/fence ownership, independent stream-mode selection, dual BL/EL decoding and FEL residual pixels remain unresolved. No owner Cube actions or binaries committed.
+
+Source-only exact audit: `angelcode1/cube3/tools/fel_codec_context_owner_audit.py` on `research/gazelle-fel-no-fork-observer-20261021`; validates **16 Thumb opcode witnesses and four BL→veneer→PLT→relocation symbol edges**, passes with unchanged original ELF and refuses altered SHA. Details in `docs/gazelle-fel-codec-context-allocation-ownership-20261022.md` in that repository. Implementation remains OFF on Fire OS.

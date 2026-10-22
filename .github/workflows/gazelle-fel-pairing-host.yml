@@ -8,6 +8,9 @@ on:
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPairing.h
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp
       - tests/TestGazelleFELPairing.cpp
+      - xbmc/utils/GazelleFELNalReader.h
+      - xbmc/utils/BitstreamConverter.cpp
+      - tests/TestGazelleFELNalReader.cpp
       - .github/workflows/gazelle-fel-pairing-host.yml
   workflow_dispatch:
 
@@ -27,3 +30,10 @@ jobs:
             tests/TestGazelleFELPairing.cpp -o /tmp/gazelle-fel-pair
           /tmp/gazelle-fel-pair
           echo 'GAZELLE_FEL_P7_PAIRING_HOST_PASS timestamps=true bounds=true device=false FEL_decode=false'
+      - name: Compile and test BL/EL NAL prefix guard
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELNalReader.cpp -o /tmp/gazelle-fel-nals
+          /tmp/gazelle-fel-nals
+          echo 'GAZELLE_FEL_NAL_READER_HOST_PASS prefixes=1,2,3,4 malformed_rejected=true no_device=true'

@@ -16,6 +16,7 @@
 
 #include "BitstreamConverter.h"
 #include "HevcSei.h"
+#include "GazelleFELNalReader.h"
 #include "StringUtils.h"
 
 #include <algorithm>
@@ -665,7 +666,15 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
 
     bl_frame_nal_buf_size = avc_parse_nal_units(pb, pData_bl, iSize_bl);
     el_frame_nal_buf_size = avc_parse_nal_units(pb, pData_el, iSize_el);
-    avio_close_dyn_buf(pb, &buf);
+    const int convertedBytes = avio_close_dyn_buf(pb, &buf);
+    // Annex-B conversion must produce the reported BL+EL byte count.
+    if (convertedBytes < 0 ||
+        static_cast<uint64_t>(bl_frame_nal_buf_size) + el_frame_nal_buf_size !=
+            static_cast<uint64_t>(convertedBytes))
+    {
+      av_free(buf);
+      return false;
+    }
   }
   else
   {
@@ -675,13 +684,41 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
   if (!buf)
     return false;
 
+  // hvcC permits one-, two-, three-, or four-byte NAL lengths.
+  // Only the Annex-B converter produces four-byte lengths unconditionally.
+  const unsigned lengthBytes =
+      m_convert_bitstream ? m_sps_pps_context.length_size : 4;
+  uint8_t* elStart =
+      m_convert_bitstream ? pData_el : buf + bl_frame_nal_buf_size;
+  auto validLayer = [lengthBytes](uint8_t* data, uint32_t bytes)
+  {
+    GazelleFEL::LengthPrefixedReader reader(data, bytes, lengthBytes);
+    GazelleFEL::NalSpan span;
+    while (reader.Next(span)) {}
+    return reader.Complete();
+  };
+
+  // Check both complete access units before appending any combined NAL.
+  if (!validLayer(buf, bl_frame_nal_buf_size) ||
+      !validLayer(elStart, el_frame_nal_buf_size))
+  {
+    CLog::Log(LOGERROR,
+              "CBitstreamConverter::ConvertFEL invalid BL/EL NAL framing lengthBytes:{}",
+              lengthBytes);
+    if (!m_convert_bitstream)
+      av_free(buf);
+    return false;
+  }
+
   // Base layer first.
   start = buf;
   end = buf + bl_frame_nal_buf_size;
-  while (end - buf > 4)
+  while (end - buf > lengthBytes)
   {
-    uint32_t size = std::min<uint32_t>(AV_RB32(buf), end - buf - 4);
-    buf += 4;
+    uint32_t size = 0;
+    for (unsigned i = 0; i < lengthBytes; ++i)
+      size = (size << 8) | buf[i];
+    buf += lengthBytes;
     if (size == 0 || buf + size > end)
       break;
 
@@ -705,10 +742,12 @@ bool CBitstreamConverter::Convert(uint8_t* pData_bl,
   // Enhancement layer. RPU stays NAL 62. Other EL NALs are presented to
   // the Amlogic Dolby decoder as NAL 63, matching the CoreELEC path.
   end = buf + el_frame_nal_buf_size;
-  while (end - buf > 4)
+  while (end - buf > lengthBytes)
   {
-    uint32_t size = std::min<uint32_t>(AV_RB32(buf), end - buf - 4);
-    buf += 4;
+    uint32_t size = 0;
+    for (unsigned i = 0; i < lengthBytes; ++i)
+      size = (size << 8) | buf[i];
+    buf += lengthBytes;
     if (size == 0 || buf + size > end)
       break;
 

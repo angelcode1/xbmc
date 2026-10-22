@@ -13,6 +13,7 @@
 //
 
 #include "DVDVideoCodecAndroidMediaCodec.h"
+#include "GazelleFELPairing.h"
 
 #include "DVDCodecs/DVDFactoryCodec.h"
 #include "ServiceBroker.h"
@@ -44,6 +45,7 @@
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -1235,15 +1237,25 @@ bool CDVDVideoCodecAndroidMediaCodec::AddData(const DemuxPacket &packet)
       {
         if (packet.isDualStream)
         {
-          auto other = std::find_if(
-              m_doviLayerPackets.begin(), m_doviLayerPackets.end(),
-              [&packet](const DolbyLayerPacket& pending)
-              {
-                return pending.isEL != packet.isELPackage;
-              });
+          // Refuse pairing different decode timestamps: the previous first-opposite
+          // packet matcher could silently merge unrelated BL and EL pictures.
+          const auto other = GazelleFELPairing::FindMate(
+              m_doviLayerPackets, packet.isELPackage, dts, pts, DVD_NOPTS_VALUE);
 
           if (other == m_doviLayerPackets.end())
           {
+            if ((!GazelleFELPairing::ValidClock(dts, DVD_NOPTS_VALUE) &&
+                 !GazelleFELPairing::ValidClock(pts, DVD_NOPTS_VALUE)) ||
+                !GazelleFELPairing::CanBuffer(m_doviLayerPackets, iSize))
+            {
+              CLog::Log(LOGERROR,
+                        "CDVDVideoCodecAndroidMediaCodec::AddData FELPAIR refusing unmatchable/"
+                        "unbounded BL/EL packet bytes:{} pending:{}",
+                        iSize, m_doviLayerPackets.size());
+              m_doviLayerPackets.clear();
+              return false;
+            }
+
             DolbyLayerPacket pending;
             pending.data.assign(pData, pData + iSize);
             pending.isEL = packet.isELPackage;
@@ -1251,14 +1263,8 @@ bool CDVDVideoCodecAndroidMediaCodec::AddData(const DemuxPacket &packet)
             pending.dts = dts;
             m_doviLayerPackets.emplace_back(std::move(pending));
 
-            // Keep a small bounded queue if a malformed stream stops pairing.
-            while (m_doviLayerPackets.size() > 8)
-            {
-              CLog::Log(LOGWARNING,
-                        "CDVDVideoCodecAndroidMediaCodec::AddData FEL pairing queue overflow; dropping oldest layer packet");
-              m_doviLayerPackets.pop_front();
-            }
-
+            // Refuse an overflow before enqueueing, rather than silently
+            // discarding a BL or EL and pairing the wrong frame later.
             CLog::Log(LOGDEBUG, LOGVIDEO,
                       "CDVDVideoCodecAndroidMediaCodec::AddData FELPAIR stored {} packet size:{} pts:{:.3f}",
                       packet.isELPackage ? "EL" : "BL", packet.iSize,
@@ -1269,6 +1275,15 @@ bool CDVDVideoCodecAndroidMediaCodec::AddData(const DemuxPacket &packet)
           DolbyLayerPacket pending = std::move(*other);
           m_doviLayerPackets.erase(other);
 
+          // Converter takes signed int sizes. Never narrow a large packet silently.
+          if (iSize > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+              pending.data.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+          {
+            CLog::Log(LOGERROR,
+                      "CDVDVideoCodecAndroidMediaCodec::AddData FELPAIR oversized layer");
+            m_doviLayerPackets.clear();
+            return false;
+          }
           uint8_t* blData = nullptr;
           int blSize = 0;
           uint8_t* elData = nullptr;
@@ -1339,9 +1354,18 @@ bool CDVDVideoCodecAndroidMediaCodec::AddData(const DemuxPacket &packet)
       {
         CLog::Log(LOGINFO, "CDVDVideoCodecAndroidMediaCodec::AddData: iSize({}) > size({})", iSize,
                   out_size);
+        if (m_hints.dovi.dv_profile == 7)
+        {
+          CLog::Log(LOGERROR,
+                    "CDVDVideoCodecAndroidMediaCodec::AddData FELPAIR refusing incomplete "
+                    "P7 access unit: bytes:{} capacity:{}", iSize, out_size);
+          m_doviLayerPackets.clear();
+          return false;
+        }
         iSize = out_size;
       }
-      // Inspect exactly the size that fits MediaCodec's input buffer, including any truncation.
+      // Other codecs retain pre-existing capacity handling. Profile 7 must
+      // never silently truncate an assembled HEVC access unit.
       if (gazelleTrace)
       {
         GazelleLogP7NalStats("post", pData, iSize, 4,

@@ -31,8 +31,11 @@ def check(cpp: str, h: str, policy: str) -> None:
             and "hint.cryptoSession" in cpp
             and "hint.dvd" in cpp
             and "hint.stills" in cpp,
-        "initial_stream_factory_preserved":
-            "std::unique_ptr<CDVDVideoCodec> codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);" in cpp,
+        "initial_stream_factory_preserved": False,
+        "initial_feature_hard_disabled":
+            "constexpr bool kDeferredStockResearchEnabled = false;" in policy
+            and "UseDeferredInitialStock(const DeferredStockInputs& v)" in policy
+            and "static_assert(!UseDeferredInitialStock(" in policy,
         "stock_only_worker_factory":
             "m_pVideoCodec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);" in cpp,
         "worker_state_declared":
@@ -50,6 +53,25 @@ def check(cpp: str, h: str, policy: str) -> None:
         "worker_message_passes_defer_flag":
             "OpenStream(msg->m_hints, std::move(msg->m_codec), msg->m_gazelleDeferred);" in cpp,
     }
+    # Initial OpenStream must make a distinct source-verified, disabled
+    # scheduling decision BEFORE the first stock factory and BEFORE Init/Create.
+    # No decoder alias or prior packet ownership is authorized by this path.
+    init_open = cpp.find("bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)")
+    init_impl = cpp.find("void CVideoPlayerVideo::OpenStream(CDVDStreamInfo& hint,", init_open)
+    initial_method = cpp[init_open:init_impl] if 0 <= init_open < init_impl else ""
+    initial_else = initial_method.find("const bool gazelleDeferredInitial")
+    guard_initial = initial_method.find("if (!gazelleDeferredInitial)")
+    first_factory = initial_method.find("codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);", initial_else)
+    handoff = initial_method.find("OpenStream(hint, std::move(codec), gazelleDeferredInitial);", initial_else)
+    queue_init = initial_method.find("m_messageQueue.Init();", initial_else)
+    worker_create = initial_method.find("Create();", initial_else)
+    guards["initial_stream_factory_preserved"] = (
+        "IsGazelleDeferredStockCandidate(hint, false)" in initial_method
+        and "IsGazelleDeferredStockCandidate(hint, true)" in initial_method
+        and min(initial_else, guard_initial, first_factory, handoff, queue_init, worker_create) >= 0
+        and initial_else < guard_initial < first_factory < handoff < queue_init < worker_create
+        and "if (!codec && !gazelleDeferredInitial)" in initial_method
+    )
     # In the dormant worker, flush/reset must not create a decoder before
     # a fresh post-seek AU. Both paths can reset the timeout without any codec.
     reset_a = cpp.find("else if (pMsg->IsType(CDVDMsg::GENERAL_RESET))")
@@ -122,6 +144,12 @@ def selftest(cpp: str, h: str, policy: str) -> None:
          h, policy),
         (cpp.replace("GazelleFEL::InspectFirstAU(", "GazelleFEL::InspectMissingAU("),
          h, policy),
+        (cpp.replace("IsGazelleDeferredStockCandidate(hint, false)",
+                     "IsGazelleDeferredStockCandidate(hint, true)"), h, policy),
+        (cpp.replace("OpenStream(hint, std::move(codec), gazelleDeferredInitial);",
+                     "OpenStream(hint, std::move(codec));"), h, policy),
+        (cpp, h, policy.replace("UseDeferredInitialStock(const DeferredStockInputs& v)",
+                                "UseDeferredInitialCodec(const DeferredStockInputs& v)")),
         (cpp.replace(
             "else if (pMsg->IsType(CDVDMsg::GENERAL_RESET))",
             "else if (pMsg->IsType(CDVDMsg::GENERAL_NEVER_RESET))"), h, policy),
@@ -135,7 +163,7 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         except AssertionError:
             continue
         raise AssertionError("NEGATIVE_MUTATION_ACCEPTED")
-    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=12 no_device=true")
+    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=15 no_device=true")
 
 
 def main() -> None:

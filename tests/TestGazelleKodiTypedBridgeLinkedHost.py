@@ -574,6 +574,39 @@ int main() {
     fence.Close(); queue.End();
   }
 
+  // A finite synthetic burst of stale originals offered for priority-10
+  // retry AFTER seek publication cannot keep the queued priority-1 control
+  // from being the next message. This proves only cooperative callers;
+  // already enqueued old priority-10 messages can still starve the control.
+  {
+    using Fence = GazelleFELPrecreate::SeekFence<CDVDMsgDemuxerPacket,
+                                                  CDVDMessageQueue>;
+    using Decision = GazelleFELPrecreate::FenceDecision;
+    unsigned freed=0;
+    CDVDMessageQueue queue("gazelle-linked-postseek-retry-flood");
+    queue.Init(); queue.SetMaxDataSize(10000);
+    Fence fence(queue,50);
+    assert(fence.PublishBarrier([](std::uint64_t) {
+      return std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH);
+    },1)==Decision::Submitted);
+    constexpr int burst=64;
+    for (int i=0; i<burst; ++i) {
+      // Model already held/in-flight packet-message owners from epoch 1.
+      auto original=Original(200+i,false,&freed);
+      assert(original->TrySetGazelleResearchEpoch(1));
+      assert(fence.TryEnqueueDecoderRetry(original)==Decision::StaleDropped);
+      assert(!original && freed==static_cast<unsigned>(i+1));
+    }
+    std::shared_ptr<CDVDMsg> flush;
+    int priority=0;
+    assert(queue.Get(flush,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(priority==1 && flush->IsType(CDVDMsg::GENERAL_FLUSH));
+    flush.reset();
+    assert(fence.BarrierApplied(2,2)==Decision::Applied);
+    assert(freed==burst && queue.GetDataSize()==0);
+    fence.Close(); queue.End();
+  }
+
   std::puts("GAZELLE_KODI_TYPED_BRIDGE_LINK_HOST_PASS "
             "original_kodi_queue_and_messages=true "
             "borrow_epoch_from_original=true priority_flush_overtake=true "
@@ -591,6 +624,7 @@ int main() {
             "zero_and_wrapped_epoch_refused=true "
             "postseek_retry_admission_blocks_priority10=true "
             "prequeued_retry_still_requires_worker_fence=true "
+            "postseek_stale_retry_burst_64_does_not_starve_flush=true "
             "external_platform_demux_shims=true "
             "no_real_worker=true no_device=true fel_switch_off=true");
 }

@@ -53,17 +53,23 @@ def check(cpp: str, h: str, policy: str) -> None:
         "worker_message_passes_defer_flag":
             "OpenStream(msg->m_hints, std::move(msg->m_codec), msg->m_gazelleDeferred);" in cpp,
     }
-    packet_gate = (
-        "if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())\n"
-        "        continue;\n"
-        "      DemuxPacket* pPacket ="
+    # Read-only RPU probe MUST happen before a STOCK factory can touch input.
+    packet_begin = cpp.find("else if (pMsg->IsType(CDVDMsg::DEMUXER_PACKET))")
+    packet_section = cpp[packet_begin:] if packet_begin >= 0 else ""
+    probe_at = packet_section.find("GazelleFEL::InspectFirstAU(")
+    stock_at = packet_section.find("if (!GazelleEnsureDeferredStockCodec())")
+    original_at = packet_section.find("DemuxPacket* pPacket =")
+    use_at = packet_section.find("m_pVideoCodec->SetCodecControl(codecControl);")
+    guards["packet_guard_before_codec_call"] = (
+        min(probe_at, stock_at, original_at, use_at) >= 0
+        and probe_at < stock_at < original_at < use_at
     )
-    if packet_gate in cpp and "m_pVideoCodec->SetCodecControl(codecControl);" in cpp:
-        guards["packet_guard_before_codec_call"] &= (
-            cpp.index(packet_gate) < cpp.index("m_pVideoCodec->SetCodecControl(codecControl);")
-        )
-    else:
-        guards["packet_guard_before_codec_call"] = False
+    guards["probe_in_real_worker_but_disabled"] = (
+        '#include "utils/GazelleFELPrecreateProbe.h"' in cpp
+        and 'm_hints.extradata.GetData()' in packet_section
+        and 'original->cryptoInfo != nullptr' in packet_section
+        and 'static_cast<bool>(m_hints.cryptoSession)' in packet_section
+    )
     timeout_gate = "if (m_gazelleDeferredStockOpen)\n      {"
     output_check = "if (m_outputSate == OUTPUT_AGAIN &&"
     guards["timeout_before_output"] = (
@@ -98,6 +104,8 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         (cpp + "\n// OMX.gazelle.research\n", h, policy),
         (cpp.replace("m_bStop = true;\n  return false;", "StopThread();\n  return false;"),
          h, policy),
+        (cpp.replace("GazelleFEL::InspectFirstAU(", "GazelleFEL::InspectMissingAU("),
+         h, policy),
     ]
     for a, b, c in variants:
         try:
@@ -105,7 +113,7 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         except AssertionError:
             continue
         raise AssertionError("NEGATIVE_MUTATION_ACCEPTED")
-    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=9 no_device=true")
+    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=10 no_device=true")
 
 
 def main() -> None:
@@ -120,7 +128,7 @@ def main() -> None:
     else:
         check(cpp, h, policy)
         print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_AUDIT_PASS "
-              "feature_enabled=false stock_only=true first_au_parser=NOT_CONNECTED "
+              "feature_enabled=false stock_only=true first_au_parser=STAGED_DISABLED_REAL_RUNTIME_NOT_TESTED "
               "full_kodi_build=NOT_TESTED on_device=NOT_TESTED")
 
 

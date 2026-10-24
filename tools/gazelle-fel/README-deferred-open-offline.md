@@ -97,6 +97,22 @@ Added `.github/workflows/gazelle-fel-android-two-tu-build.yml` and `tools/gazell
 
 Next after the exact target build: make the real initial-open packet handoff use the proven parser, with bounded original-message ownership and seek/timeout/flush safety; test full Kodi lifecycle before any device test. No on-device activation while independent recovery R0 is unverified.
 
+## 24 October 2026 — Android two-TU compile-command validation (source CI PASS, target build pending)
+
+The Android ARMv7 build-only workflow is now live, following the base Kodi `android-firetv-bluray.yml` bootstrap and pinned NDK r28c. It does **not** produce/sign/upload an APK, use signing secrets or contact a Cube. It compiles only `VideoPlayerVideo.cpp` and `BitstreamConverter.cpp` using CMake's generated `compile_commands.json`. These translation units have **NOT YET PASSED** actual Android compilation at the most recent check; dependencies are still compiling.
+
+Review found an important potential false-positive in the runner: a `compile_commands.json` `file` field could name the target while the command itself compiled an unrelated file. This is now fail-closed in `tools/gazelle-fel/compile-android-kodi-tus.py`: require **exactly one** source path matching the claimed file, `-c`, an ARMv7 target, `-o` pointing to a `.o`, and a compiler under `ANDROID_NDK_HOME`. CMake-generated commands are executed with `subprocess.run(argv)`, never shell.
+
+Added `tests/TestGazelleCompileCommands.py`, exercising six negative cases using a dummy compiler; this does **not** compile Android Kodi. [CI run 40060808504](https://github.com/angelcode1/xbmc/actions/runs/40060808504) completed **SUCCESS** for both `source-only` and `real-libdovi-abi`. Source CI printed:
+
+```text
+GAZELLE_ANDROID_COMPILE_COMMANDS_SOURCE_SELFTEST_PASS negative=6 exact_tus=true armv7_only=true real_android_compilation=false no_device=true
+```
+
+Two isolated Android compile-only runs may coexist after improving the runner: [original run 40059389926](https://github.com/angelcode1/xbmc/actions/runs/40059389926) uses the earlier runner and [revised run 40060758989](https://github.com/angelcode1/xbmc/actions/runs/40060758989) uses the stricter runner; both were still in initial build/dependency setup at the latest check. **Do not claim Android compilation from the source-mock selftest or running workflow.** A final target compile pass requires `GAZELLE_ANDROID_ARMV7_TWO_TU_COMPILE_PASS` from the actual Android job after CMake generates the database, for BOTH source files. Even then that would not demonstrate a full Kodi link or real device runtime.
+
+The experimental runtime policy remains `kDeferredStockResearchEnabled=false` protected by a `static_assert`. Existing UDF/MMBD, satellite, HDMI and the six Magisk modules remain untouched.
+
 ## Source-lifetime restrictions
 
 - The video worker can receive `MSGQ_TIMEOUT` and call `ProcessDecoderOutput` even before any packet. Pending mode must guard this path before a null `m_pVideoCodec` dereference. The optional branch currently waits up to 500 ms and then uses stock; this is **not an owner-approved timing parameter** or a production latency claim.

@@ -43,11 +43,11 @@ inline PrecreateRpuType InspectRpu(const uint8_t* nal, std::size_t size) noexcep
   if ((nal[0] & 0x80u) || ((nal[0] >> 1u) & 63u) != 62u || (nal[1] & 7u) == 0u)
     return PrecreateRpuType::Unknown;
 #ifdef HAVE_LIBDOVI
-  DoviRpuOpaque* const rpu = dovi_parse_unspec62_nalu(nal, size);
+  auto* const rpu = dovi_parse_unspec62_nalu(nal, size);
   if (!rpu)
     return PrecreateRpuType::Unknown;
   // Header is separately heap allocated by libdovi, not owned by RpuOpaque.
-  const DoviRpuDataHeader* const header = dovi_rpu_get_header(rpu);
+  const auto* const header = dovi_rpu_get_header(rpu);
   PrecreateRpuType answer = PrecreateRpuType::Unknown;
   if (header && header->guessed_profile == 7 && header->el_type)
   {

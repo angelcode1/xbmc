@@ -38,7 +38,7 @@ using namespace std::chrono_literals;
 // This maps only existing Kodi hint fields into a *scheduling candidate*.
 // It never authenticates FEL or authorizes any research codec name.
 namespace {
-bool IsGazelleDeferredStockCandidate(const CDVDStreamInfo& hint)
+bool IsGazelleDeferredStockCandidate(const CDVDStreamInfo& hint, bool workerAlreadyRunning)
 {
   const KODI::VIDEO::GAZELLE::DeferredStockInputs inputs{
       hint.codec == AV_CODEC_ID_HEVC,
@@ -48,8 +48,9 @@ bool IsGazelleDeferredStockCandidate(const CDVDStreamInfo& hint)
       static_cast<bool>(hint.cryptoSession),
       hint.dvd,
       hint.stills,
-      true};
-  return KODI::VIDEO::GAZELLE::UseDeferredStock(inputs);
+      workerAlreadyRunning};
+  return workerAlreadyRunning ? KODI::VIDEO::GAZELLE::UseDeferredStock(inputs)
+                              : KODI::VIDEO::GAZELLE::UseDeferredInitialStock(inputs);
 }
 } // namespace
 
@@ -160,9 +161,9 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
       hint.codecOptions |= CODEC_ALLOW_FALLBACK;
     }
 
-    // Only the already-running video-worker stream-change path can stage a
-    // stock factory deferral. Initial OpenStream still uses the existing path.
-    const bool gazelleDeferred = IsGazelleDeferredStockCandidate(hint);
+    // An already-running worker can receive the first original demux message
+    // before creating stock. The entire path is still hard-disabled in policy.
+    const bool gazelleDeferred = IsGazelleDeferredStockCandidate(hint, true);
     std::unique_ptr<CDVDVideoCodec> codec;
     if (!gazelleDeferred)
       codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
@@ -177,14 +178,21 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
     m_processInfo.ResetVideoCodecInfo();
     hint.codecOptions |= CODEC_ALLOW_FALLBACK;
 
-    std::unique_ptr<CDVDVideoCodec> codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
-    if (!codec)
+    // Initial-open staging: this code runs BEFORE m_messageQueue.Init/Create,
+    // so the newly created video worker can own the original first demux
+    // packet. Neither hints nor a P7 EL flag establish FEL authenticity.
+    // Policy's compile-time false gate preserves the stock factory path.
+    const bool gazelleDeferredInitial = IsGazelleDeferredStockCandidate(hint, false);
+    std::unique_ptr<CDVDVideoCodec> codec;
+    if (!gazelleDeferredInitial)
+      codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
+    if (!codec && !gazelleDeferredInitial)
     {
       CLog::Log(LOGERROR, "CVideoPlayerVideo::OpenStream - could not open video codec");
       return false;
     }
 
-    OpenStream(hint, std::move(codec));
+    OpenStream(hint, std::move(codec), gazelleDeferredInitial);
     CLog::Log(LOGINFO, "Creating video thread");
     m_messageQueue.Init();
     m_processInfo.SetLevelVQ(0);

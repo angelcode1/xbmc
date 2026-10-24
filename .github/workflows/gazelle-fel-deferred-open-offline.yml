@@ -26,6 +26,7 @@ on:
       - tests/TestGazelleKodiQueueObjectLink.py
       - tests/TestGazelleKodiQueueRealMessageHeaders.py
       - tests/TestGazelleKodiTypedBridgeLinkedHost.py
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateAdmission.h
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h
       - xbmc/cores/VideoPlayer/DVDMessage.cpp
       - tests/TestGazelleKodiProducerStampSource.py

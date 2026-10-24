@@ -30,6 +30,9 @@ on:
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELAwaitBarrierOwners.h
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateSeekFence.h
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateDispatchLease.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELOutputGenerationFence.h
+      - tests/TestGazelleFELOutputGenerationFence.cpp
+      - tests/TestGazelleFELOutputGenerationSource.py
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELNativeQuiescenceGate.h
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp
       - tests/TestGazelleFELNativeQuiescenceGate.cpp
@@ -151,6 +154,23 @@ jobs:
         run: |
           set -euo pipefail
           python3 -S tests/TestGazelleMediaCodecQuiescenceSource.py
+      - name: Audit unwired output-generation fence and 14 fail-closed mutations
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleFELOutputGenerationSource.py
+      - name: Test output-generation lease, JNI permits and renderer-held outputs (host)
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -pthread \
+            tests/TestGazelleFELOutputGenerationFence.cpp -o /tmp/gazelle-output-generation
+          /tmp/gazelle-output-generation
+      - name: Repeat output-generation host tests under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic -pthread \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELOutputGenerationFence.cpp -o /tmp/gazelle-output-generation-ubsan
+          /tmp/gazelle-output-generation-ubsan
       - name: Test synthetic native quiescence witness requirements
         run: |
           set -euo pipefail

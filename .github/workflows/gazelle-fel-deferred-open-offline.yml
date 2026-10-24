@@ -12,6 +12,7 @@ on:
       - tests/TestGazelleDeferredStockPolicy.cpp
       - xbmc/utils/GazelleFELPrecreateProbe.h
       - tests/TestGazelleFELPrecreateProbe.cpp
+      - tests/TestGazelleFELRealLibdovi.cpp
       - tests/stubs/libdovi/rpu_parser.h
       - tools/gazelle-fel/verify-deferred-open-source.py
   workflow_dispatch:
@@ -66,3 +67,31 @@ jobs:
           echo 'MEDIACODEC_RUNTIME=NOT_TESTED'
           echo 'FEL_RPU_PARSER=SOURCE_CONNECTED_DISABLED_REAL_LIBDOVI_NOT_RUNTIME_TESTED'
           echo 'CUBE_UNTOUCHED=true'
+
+  real-libdovi-abi:
+    # Use the OS that actually packages 3.3.2; Ubuntu 24.04 ships no libdovi-dev.
+    # This is a host ABI check only, not a Kodi or Android build.
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    timeout-minutes: 12
+    steps:
+      - name: Install real packaged libdovi 3.3.2 and C++ compiler
+        run: |
+          set -eu
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates git g++ libdovi-dev pkg-config
+          dpkg-query -W -f='libdovi-dev=${Version}\n' libdovi-dev
+          test "$(dpkg-query -W -f='${Version}' libdovi-dev | cut -d- -f1)" = "3.3.2"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile/link/execute production first-AU probe against REAL libdovi
+        run: |
+          set -eu
+          test -f /usr/include/libdovi/rpu_parser.h
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELRealLibdovi.cpp -ldovi -o /tmp/gazelle-real-libdovi
+          ldd /tmp/gazelle-real-libdovi | grep -F libdovi
+          /tmp/gazelle-real-libdovi
+          echo 'GAZELLE_REAL_LIBDOVI_HOST_ABI_GATE_PASS full_kodi_build=false real_FEL_fixture=false no_device=true'

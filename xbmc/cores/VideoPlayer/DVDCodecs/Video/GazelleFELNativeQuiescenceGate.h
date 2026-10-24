@@ -35,7 +35,7 @@ public:
   bool InputStarted(std::uint64_t inputEpoch) noexcept
   {
     if (m_closed || inputEpoch == 0 || m_unsettledInput ||
-        m_pendingEvidenceEpoch != 0)
+        m_nativeDebt || m_pendingEvidenceEpoch != 0)
       return false;
     m_inputEpoch = inputEpoch;
     m_unsettledInput = true;

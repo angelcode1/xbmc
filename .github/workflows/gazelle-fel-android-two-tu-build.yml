@@ -196,6 +196,32 @@ jobs:
             exit 1
           fi
 
+      - name: Materialize Kodi Fmt and Spdlog before direct translation-unit compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          # FindFmt.cmake supplies the internal build-fmt ExternalProject;
+          # FindSpdlog.cmake requires Fmt and supplies build-spdlog.
+          # Raw compiler invocations bypass the CMake target dependency graph.
+          logfile="$RUNNER_TEMP/gazelle-fmt-spdlog-prereqs.log"
+          if cmake --build "$BUILD_DIR" --target build-fmt build-spdlog --parallel 2 >"$logfile" 2>&1; then
+            echo GAZELLE_ANDROID_FMT_SPDLOG_PREREQUISITES_PASS
+            tail -n 30 "$logfile"
+          else
+            code=$?
+            echo '::error::Kodi Fmt/Spdlog prerequisites failed before translation-unit compile'
+            grep -E -i '(fatal error|error:|no space left|killed|failed)' "$logfile" | tail -n 70 || true
+            tail -n 100 "$logfile"
+            exit "$code"
+          fi
+          if ! find "$BUILD_DIR" -type f -path '*/fmt/format.h' -print -quit | grep -q .; then
+            echo '::error::build-fmt succeeded but generated fmt/format.h is missing'
+            exit 1
+          fi
+          if ! find "$BUILD_DIR" -type f -path '*/spdlog/spdlog.h' -print -quit | grep -q .; then
+            echo '::error::build-spdlog succeeded but generated spdlog/spdlog.h is missing'
+            exit 1
+          fi
       - name: Compile exactly the two real Android Kodi translation units
         shell: bash
         run: |

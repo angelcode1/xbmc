@@ -24,7 +24,21 @@ def verify(codec: str, worker: str, model: str) -> None:
     reset = codec[reset_start:reset_end]
     dispose = codec[dispose_start:reset_start]
     add = codec[add_start:reset_start]
+    # The error path after queueInputBuffer/queueSecureInputBuffer logs
+    # and clears a JNI exception, then flows to AddData's final true return.
+    # Thus a bool AddData success does NOT acknowledge native acceptance.
+    queue_error = add.find('CDVDVideoCodecAndroidMediaCodec::AddData error')
+    queue_done = add.find('m_indexInputBuffer = -1;', queue_error)
+    final_success = add.rfind('return true;')
     checks = {
+        "add_data_true_not_native_input_ack":
+            queue_error >= 0 and queue_done > queue_error
+            and final_success > queue_done
+            and 'xbmc_jnienv()->ExceptionClear();' in add[
+                add.rfind("if (xbmc_jnienv()->ExceptionCheck())", 0, queue_error):
+                queue_error
+            ]
+            and 'return false;' not in add[queue_error:queue_done],
         "native_input_submit_separate":
             "m_codec->queueInputBuffer(" in add
             and "m_codec->queueSecureInputBuffer(" in add,
@@ -74,6 +88,12 @@ def main() -> None:
         (codec.replace("m_codec->flush();", "m_codec->start();"), worker, model),
         (codec.replace("m_codec->queueInputBuffer(", "m_codec->queueInputX("),
          worker, model),
+        (codec.replace("CDVDVideoCodecAndroidMediaCodec::AddData error",
+                       "GAZELLE_REMOVED_QUEUE_ERROR"),
+         worker, model),
+        (codec.replace("  return true;\n}\n\nvoid CDVDVideoCodecAndroidMediaCodec::Reset()",
+                       "  return false;\n}\n\nvoid CDVDVideoCodecAndroidMediaCodec::Reset()"),
+         worker, model),
         (codec.replace("m_videoBufferPool->ResetMediaCodec();",
                        "m_videoBufferPool->CloseUntracked();"), worker, model),
         (codec.replace("m_videoBufferPool->Get()", "m_videoBufferPool->Fake()"),
@@ -91,8 +111,8 @@ def main() -> None:
         except AssertionError:
             continue
         raise AssertionError("GAZELLE_CODEC_QUIESCENCE_MUTATION_ACCEPTED")
-    print("GAZELLE_MEDIACODEC_QUIESCENCE_SOURCE_PASS negative=7 "
-          "jni_flush_not_native_idle=true output_pool_separate=true "
+    print("GAZELLE_MEDIACODEC_QUIESCENCE_SOURCE_PASS negative=9 "
+          "jni_flush_not_native_idle=true add_data_true_not_ack=true output_pool_separate=true "
           "no_real_Android_quiescence_witness=true live_worker_unwired=true")
 
 

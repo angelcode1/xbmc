@@ -42,8 +42,13 @@ static void Append(std::vector<std::uint8_t>& dst,
 static void Check(const char* path, PrecreateRpuType expected)
 {
   const auto bytes = ReadRpu(path);
-  const auto* rpu = bytes.data() + 4;
-  const std::size_t size = bytes.size() - 4;
+  // Upstream test .bin stores raw RPU after the Annex B start code. Its
+  // first payload byte is 0x19, NOT the HEVC NAL-62 header. Wrap it with
+  // 0x7c01 exactly as Kodi's in-band HEVC packet contains it.
+  std::vector<std::uint8_t> nal{0x7c, 0x01};
+  nal.insert(nal.end(), bytes.begin() + 4, bytes.end());
+  const auto* rpu = nal.data();
+  const std::size_t size = nal.size();
   assert(GazelleFEL::InspectRpu(rpu, size) == expected);
   const std::array<std::uint8_t, 3> bl{{0x26, 0x01, 0x12}};
   const std::array<std::uint8_t, 3> el{{0x7e, 0x01, 0x24}};

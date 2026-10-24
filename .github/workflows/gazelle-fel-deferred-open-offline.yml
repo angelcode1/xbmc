@@ -10,6 +10,9 @@ on:
       - xbmc/cores/VideoPlayer/VideoPlayerVideo.h
       - xbmc/cores/VideoPlayer/GazelleDeferredOpenPolicy.h
       - tests/TestGazelleDeferredStockPolicy.cpp
+      - xbmc/utils/GazelleFELPrecreateProbe.h
+      - tests/TestGazelleFELPrecreateProbe.cpp
+      - tests/stubs/libdovi/rpu_parser.h
       - tools/gazelle-fel/verify-deferred-open-source.py
   workflow_dispatch:
 
@@ -42,10 +45,24 @@ jobs:
             -fsanitize=undefined -fno-sanitize-recover=all \
             tests/TestGazelleDeferredStockPolicy.cpp -o /tmp/gazelle-deferred-ubsan
           /tmp/gazelle-deferred-ubsan
+      - name: Compile and test P7 first-AU probe using FAKE libdovi ABI
+        run: |
+          set -euo pipefail
+          # Explicit stub: tests safe framing/cleanup/control flow, not real RPU semantics.
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            -Itests/stubs tests/TestGazelleFELPrecreateProbe.cpp -o /tmp/gazelle-rpu-probe-stub
+          /tmp/gazelle-rpu-probe-stub
+      - name: Compile fake RPU probe under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            -Itests/stubs tests/TestGazelleFELPrecreateProbe.cpp -o /tmp/gazelle-rpu-probe-ubsan
+          /tmp/gazelle-rpu-probe-ubsan
       - name: Explicit limitation notice
         run: |
           echo 'GAZELLE_KODI_DEFERRED_OFFLINE_CI_PASS compiled_shared_policy=true'
           echo 'FULL_KODI_ANDROID_BUILD=NOT_TESTED'
           echo 'MEDIACODEC_RUNTIME=NOT_TESTED'
-          echo 'FEL_RPU_PARSER=NOT_CONNECTED'
+          echo 'FEL_RPU_PARSER=SOURCE_CONNECTED_DISABLED_REAL_LIBDOVI_NOT_RUNTIME_TESTED'
           echo 'CUBE_UNTOUCHED=true'

@@ -18,6 +18,10 @@ on:
       - tests/TestGazelleFELPrecreateOwners.cpp
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateEpochQueue.h
       - tests/TestGazelleFELPrecreateEpochQueue.cpp
+      - xbmc/cores/VideoPlayer/DVDMessage.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELProducerEpoch.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiProducerEpoch.h
+      - tests/TestGazelleFELProducerEpoch.cpp
       - tools/gazelle-fel/compile-android-kodi-tus.py
       - tests/TestGazelleCompileCommands.py
       - tests/stubs/libdovi/rpu_parser.h
@@ -93,6 +97,19 @@ jobs:
             -fsanitize=undefined -fno-sanitize-recover=all \
             tests/TestGazelleFELPrecreateEpochQueue.cpp -o /tmp/gazelle-epoch-model-ubsan
           /tmp/gazelle-epoch-model-ubsan
+      - name: Verify Kodi-like producer-time original message stamp (C++17)
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -pthread \
+            tests/TestGazelleFELProducerEpoch.cpp -o /tmp/gazelle-producer-stamp
+          /tmp/gazelle-producer-stamp
+      - name: Repeat producer stamp and priority flush under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic -pthread \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELProducerEpoch.cpp -o /tmp/gazelle-producer-stamp-ubsan
+          /tmp/gazelle-producer-stamp-ubsan
       - name: Reject spoofed Android compiler commands (host-only)
         run: |
           set -euo pipefail

@@ -113,6 +113,24 @@ Two isolated Android compile-only runs may coexist after improving the runner: [
 
 The experimental runtime policy remains `kDeferredStockResearchEnabled=false` protected by a `static_assert`. Existing UDF/MMBD, satellite, HDMI and the six Magisk modules remain untouched.
 
+## 24 October 2026 — first Android ARMv7 compilation reached actual Clang; missing internal FFmpeg prerequisite
+
+The **first** compile-only run [40059389926](https://github.com/angelcode1/xbmc/actions/runs/40059389926) finished **FAILURE**, but it made useful progress: Android SDK/NDK r28c installation PASS, all `tools/depends` PASS and Kodi CMake configure PASS. Direct compilation of `VideoPlayerVideo.cpp` then failed **before reaching the Gazelle changes**, because an existing Kodi header required `libavutil/pixfmt.h`:
+
+```text
+GAZELLE_ANDROID_ARMV7_TU_START path=xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+xbmc/cores/VideoPlayer/Buffers/VideoBuffer.h:21:10: fatal error: 'libavutil/pixfmt.h' file not found
+GAZELLE_ANDROID_TU_COMPILE_REFUSED GAZELLE_ANDROID_ARMV7_TU_FAIL xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp exit=1
+```
+
+**Root cause:** `cmake/modules/FindFFMPEG.cmake` configures **internal FFmpeg**, which is a Kodi CMake `ExternalProject` target named `build-ffmpeg` from `cmake/scripts/common/ModuleHelpers.cmake`. CMake generates a compile database without first building that target, and a bare `clang++ -c` command from the compile database does not express/exert the required dependency ordering. CMake's configure report had `LIBDOVI enabled: Yes`, but that is not proof of other generated headers.
+
+**Fix on this isolated research branch:** `.github/workflows/gazelle-fel-android-two-tu-build.yml` now performs `cmake --build "$BUILD_DIR" --target build-ffmpeg --parallel 2` after configure, fails closed on any FFmpeg build problem and checks that generated `libavutil/pixfmt.h` exists before attempting the two requested Kodi TUs. This does not touch Kodi runtime, proprietary binaries, APK signing or the Cube.
+
+The new [compile-only run 40060990150](https://github.com/angelcode1/xbmc/actions/runs/40060990150) was **in progress** when this text was written. Its final FFmpeg, `VideoPlayerVideo.cpp` and `BitstreamConverter.cpp` results must be checked independently; do not claim an actual target compile pass until both translation units print their exact `GAZELLE_ANDROID_ARMV7_TU_PASS` markers. Another runner, [40060758989](https://github.com/angelcode1/xbmc/actions/runs/40060758989), had already started before this prerequisite fix and may produce the same missing-header error.
+
+**Next**: distinguish Kodi build/dependency failures from genuine Gazelle source compile errors. Do not enable `kDeferredStockResearchEnabled=false` or install an APK; R0 rollback, first normal stream precreate integration and native FEL residual decoding remain NOT IMPLEMENTED.
+
 ## Source-lifetime restrictions
 
 - The video worker can receive `MSGQ_TIMEOUT` and call `ProcessDecoderOutput` even before any packet. Pending mode must guard this path before a null `m_pVideoCodec` dereference. The optional branch currently waits up to 500 ms and then uses stock; this is **not an owner-approved timing parameter** or a production latency claim.

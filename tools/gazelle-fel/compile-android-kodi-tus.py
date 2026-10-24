@@ -19,6 +19,32 @@ TARGETS = (
     "xbmc/utils/BitstreamConverter.cpp",
 )
 
+# Direct compile_commands execution bypasses ExternalProject header builds.
+# These names were verified against Kodi's Find*.cmake BUILD_DEP_TARGET calls.
+# No general header->target guessing, no APK target, no shell commands.
+GENERATED_HEADER_TARGETS = {
+    "libavutil/pixfmt.h": "build-ffmpeg",
+    "libavcodec/avcodec.h": "build-ffmpeg",
+    "libavutil/dovi_meta.h": "build-ffmpeg",
+    "fmt/format.h": "build-fmt",
+    "spdlog/spdlog.h": "build-spdlog",
+    "pcre2.h": "build-pcre2",
+    "nlohmann/json.hpp": "build-nlohmann_json",
+    "tinyxml2.h": "build-tinyxml2",
+}
+MAX_DEPENDENCY_RECOVERIES = 6
+
+
+def recoverable_prerequisite(compiler_output: str, already_attempted: set[str]) -> str | None:
+    """Return an explicitly audited target for one missing generated header."""
+    import re
+
+    missing = re.findall(r"fatal error: '([^'\\n]+)' file not found", compiler_output)
+    if len(missing) != 1:
+        return None
+    target = GENERATED_HEADER_TARGETS.get(missing[0])
+    return target if target not in already_attempted else None
+
 
 def compile_units(database: Path, source_root: Path) -> None:
     commands = json.loads(database.read_text(encoding="utf-8"))
@@ -68,16 +94,42 @@ def compile_units(database: Path, source_root: Path) -> None:
         if obj.suffix != ".o":
             raise RuntimeError(f"NOT_OBJECT_OUTPUT {suffix}")
         print(f"GAZELLE_ANDROID_ARMV7_TU_START path={suffix}", flush=True)
-        proc = subprocess.run(
-            argv, cwd=str(cwd), stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, text=True, timeout=900, check=False
-        )
-        if proc.stdout:
-            # No proprietary binaries or file content, just compiler output.
-            print(proc.stdout[-28000:], flush=True)
-        if proc.returncode:
-            raise RuntimeError(f"GAZELLE_ANDROID_ARMV7_TU_FAIL {suffix} exit={proc.returncode}")
-        print(f"GAZELLE_ANDROID_ARMV7_TU_PASS path={suffix}", flush=True)
+        # Use only the explicit, source-reviewed Kodi ExternalProject target
+        # names, and only on a single exact missing-header compiler error.
+        # Otherwise fail immediately and preserve the original diagnostics.
+        attempted: set[str] = set()
+        while True:
+            proc = subprocess.run(
+                argv, cwd=str(cwd), stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, timeout=900, check=False
+            )
+            if proc.returncode == 0:
+                print(f"GAZELLE_ANDROID_ARMV7_TU_PASS path={suffix}", flush=True)
+                break
+            if proc.stdout:
+                print(proc.stdout[-28000:], flush=True)
+            prereq = recoverable_prerequisite(proc.stdout or "", attempted)
+            if not prereq or len(attempted) >= MAX_DEPENDENCY_RECOVERIES:
+                raise RuntimeError(
+                    f"GAZELLE_ANDROID_ARMV7_TU_FAIL {suffix} exit={proc.returncode} "
+                    f"prerequisites_attempted={sorted(attempted)}"
+                )
+            attempted.add(prereq)
+            print(f"GAZELLE_ANDROID_KNOWN_HEADER_RECOVERY_START target={prereq}", flush=True)
+            build = subprocess.run(
+                ["cmake", "--build", str(database.resolve().parent), "--target", prereq,
+                 "--parallel", "2"],
+                cwd=str(cwd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, timeout=3600, check=False
+            )
+            if build.returncode:
+                if build.stdout:
+                    print(build.stdout[-18000:], flush=True)
+                raise RuntimeError(
+                    f"GAZELLE_ANDROID_KNOWN_HEADER_RECOVERY_FAIL target={prereq} "
+                    f"exit={build.returncode}"
+                )
+            print(f"GAZELLE_ANDROID_KNOWN_HEADER_RECOVERY_PASS target={prereq}", flush=True)
 
     print(
         "GAZELLE_ANDROID_ARMV7_TWO_TU_COMPILE_PASS "

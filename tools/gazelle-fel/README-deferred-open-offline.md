@@ -131,6 +131,22 @@ The new [compile-only run 40060990150](https://github.com/angelcode1/xbmc/action
 
 **Next**: distinguish Kodi build/dependency failures from genuine Gazelle source compile errors. Do not enable `kDeferredStockResearchEnabled=false` or install an APK; R0 rollback, first normal stream precreate integration and native FEL residual decoding remain NOT IMPLEMENTED.
 
+## 24 October 2026 — FFmpeg ordering fixed, next real Android compiler blocker is Fmt
+
+**Corrected Android run [40060990150](https://github.com/angelcode1/xbmc/actions/runs/40060990150) completed FAILURE** after `tools/depends` and Kodi CMake configuration passed. The new `build-ffmpeg` prerequisite **passed**, proving it resolved the prior missing `libavutil/pixfmt.h` blocker. Clang then got further into the existing Kodi include stack and failed before reaching Gazelle code:
+
+```text
+GAZELLE_ANDROID_ARMV7_TU_START path=xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+xbmc/cores/VideoSettings.h:16:10: fatal error: 'fmt/format.h' file not found
+GAZELLE_ANDROID_TU_COMPILE_REFUSED GAZELLE_ANDROID_ARMV7_TU_FAIL xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp exit=1
+```
+
+**Verified source cause:** Kodi's `cmake/modules/FindFmt.cmake` uses internal `BUILD_DEP_TARGET()` to define `build-fmt`. `cmake/modules/FindSpdlog.cmake` defines `build-spdlog` and depends on Fmt. Directly invoking raw `compile_commands.json` commands does not execute these external prerequisites, just as it did not execute internal FFmpeg. The isolated `.github/workflows/gazelle-fel-android-two-tu-build.yml` now runs `cmake --build "$BUILD_DIR" --target build-fmt build-spdlog --parallel 2`, verifies generated `fmt/format.h` and `spdlog/spdlog.h`, and only then starts the exact two-TU compiler commands.
+
+New [run 40063601810](https://github.com/angelcode1/xbmc/actions/runs/40063601810) started with this patch, **no Android C++ compilation success verified at this checkpoint**. The earlier `BitstreamConverter.cpp` source TU was never reached after the video-worker failure. Do not count the earlier [source-only mock compile-command test](https://github.com/angelcode1/xbmc/actions/runs/40060808504) as actual Android C++ compilation.
+
+The decoder remains hard OFF (`kDeferredStockResearchEnabled=false`, compile-time static assert). This is only a CI build-order adjustment, not a change to production Kodi, FFmpeg library versions, startup paths, Android media services, Magisk, device binaries or FEL activation.
+
 ## Source-lifetime restrictions
 
 - The video worker can receive `MSGQ_TIMEOUT` and call `ProcessDecoderOutput` even before any packet. Pending mode must guard this path before a null `m_pVideoCodec` dereference. The optional branch currently waits up to 500 ms and then uses stock; this is **not an owner-approved timing parameter** or a production latency claim.

@@ -38,6 +38,7 @@ using namespace std::chrono_literals;
 constexpr double DVD_NOPTS_VALUE = -4503599627370496.0;
 constexpr double DVD_TIME_BASE = 1000000.0;
 constexpr int LOGDEBUG=0, LOGWARNING=1, LOGFATAL=2, LOGINFO=3;
+constexpr unsigned SYNCSOURCE_ANY=0x08;
 struct CLog {
   template<class... Args> static void Log(int, const char*, Args&&...) {}
 };

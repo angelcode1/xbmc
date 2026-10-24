@@ -8,6 +8,9 @@ on:
       - .github/workflows/gazelle-fel-android-two-tu-build.yml
       - tools/gazelle-fel/compile-android-kodi-tus.py
       - xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+      - xbmc/cores/VideoPlayer/VideoPlayerVideo.h
+      - xbmc/cores/VideoPlayer/GazelleDeferredOpenPolicy.h
+      - xbmc/utils/GazelleFELPrecreateProbe.h
       - xbmc/utils/BitstreamConverter.cpp
   workflow_dispatch:
 

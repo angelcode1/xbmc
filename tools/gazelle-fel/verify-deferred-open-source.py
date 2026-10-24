@@ -135,6 +135,10 @@ def check(cpp: str, h: str, policy: str) -> None:
     guards["nonblocking_retry_fence_unwired"] = (
         '#include "DVDCodecs/Video/GazelleFELPrecreateSeekFence.h"' not in cpp
         and '#include "DVDCodecs/Video/GazelleFELAwaitBarrierOwners.h"' not in cpp
+        and '#include "DVDCodecs/Video/GazelleFELPrecreateDispatchLease.h"' not in cpp
+        and "GazelleFELPrecreate::DispatchLease<" not in cpp
+        and "PrepareOriginalLease(" not in cpp
+        and "BeginOriginalLease(" not in cpp
         and "GazelleFELPrecreate::SeekFence<" not in cpp
         and "TryEnqueueDecoderRetry(" not in cpp
         and "GazelleFELPrecreate::AwaitBarrierOwners<" not in cpp
@@ -201,6 +205,9 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         (cpp + '\n#include "DVDCodecs/Video/GazelleFELPrecreateSeekFence.h"\n',
          h, policy),
         (cpp + "\n// TryEnqueueDecoderRetry(packet);\n", h, policy),
+        (cpp + '\n#include "DVDCodecs/Video/GazelleFELPrecreateDispatchLease.h"\n',
+         h, policy),
+        (cpp + "\n// BeginOriginalLease();\n", h, policy),
         (cpp.replace("SendMessage(msg, 10);", "SendMessage(msg, 0);"), h, policy),
         (cpp.replace("!original->isDualStream && !original->isELPackage",
                      "true && !original->isELPackage"), h, policy),
@@ -219,7 +226,7 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         except AssertionError:
             continue
         raise AssertionError("NEGATIVE_MUTATION_ACCEPTED")
-    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=24 no_device=true")
+    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=26 no_device=true")
 
 
 def main() -> None:

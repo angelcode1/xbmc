@@ -29,6 +29,8 @@ on:
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateAdmission.h
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELAwaitBarrierOwners.h
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateSeekFence.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateDispatchLease.h
+      - tests/TestGazelleFELPrecreateDispatchLease.cpp
       - tests/TestGazelleFELAwaitBarrierOwners.cpp
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h
       - xbmc/cores/VideoPlayer/DVDMessage.cpp
@@ -128,6 +130,19 @@ jobs:
             -fsanitize=undefined -fno-sanitize-recover=all \
             tests/TestGazelleFELAwaitBarrierOwners.cpp -o /tmp/gazelle-await-barrier-ubsan
           /tmp/gazelle-await-barrier-ubsan
+      - name: Test two-phase cancellable original dispatch leases (host)
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELPrecreateDispatchLease.cpp -o /tmp/gazelle-dispatch-lease
+          /tmp/gazelle-dispatch-lease
+      - name: Repeat two-phase original dispatch leases under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELPrecreateDispatchLease.cpp -o /tmp/gazelle-dispatch-lease-ubsan
+          /tmp/gazelle-dispatch-lease-ubsan
       - name: Verify Kodi-like producer-time original message stamp (C++17)
         run: |
           set -euo pipefail

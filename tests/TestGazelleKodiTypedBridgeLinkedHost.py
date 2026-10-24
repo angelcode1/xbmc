@@ -607,6 +607,111 @@ int main() {
     fence.Close(); queue.End();
   }
 
+  // New two-phase lease: a prepared original can be canceled at seek
+  // publication before ANY decoder work. The already dequeued Kodi queue
+  // packet isn't PutBack'd and its destructor runs exactly once.
+  {
+    using Fence = GazelleFELPrecreate::SeekFence<CDVDMsgDemuxerPacket,
+                                                  CDVDMessageQueue>;
+    using Decision = GazelleFELPrecreate::FenceDecision;
+    unsigned freed=0;
+    CDVDMessageQueue queue("gazelle-linked-lease-revocation");
+    queue.Init(); queue.SetMaxDataSize(10000);
+    Fence fence(queue,50);
+    for (int id=300; id<302; ++id) {
+      auto original=Original(id,false,&freed);
+      assert(fence.EnqueueOriginal(original)==Decision::Submitted);
+      original.reset();
+      auto queued=NextPacket(queue);
+      assert(fence.PrepareOriginalLease(queued,20)==Decision::LeasePrepared);
+      assert(!queued);
+    }
+    assert(fence.PreparedForAuditOnly()==2 && freed==0);
+    assert(fence.PublishBarrier([](std::uint64_t) {
+      return std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH);
+    },1)==Decision::Submitted);
+    assert(fence.PreparedForAuditOnly()==0 && freed==2);
+    assert(!fence.BeginOriginalLease());
+    std::shared_ptr<CDVDMsg> flush; int priority=0;
+    assert(queue.Get(flush,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(priority==1 && flush->IsType(CDVDMsg::GENERAL_FLUSH));
+    flush.reset();
+    assert(fence.BarrierApplied(2,2)==Decision::Applied);
+    assert(queue.GetDataSize()==0);
+    fence.Close(); queue.End();
+  }
+
+  // Deterministic interleaving of external potentially BLOCKING operation
+  // versus new seek. Lease.Begin exits fence lock BEFORE worker blocks;
+  // publication can proceed and cancel another PREPARED packet immediately,
+  // but applied flush must REFUSE while old original is in-flight. No
+  // attempt to abort the native operation or steal its shared packet.
+  {
+    using Fence = GazelleFELPrecreate::SeekFence<CDVDMsgDemuxerPacket,
+                                                  CDVDMessageQueue>;
+    using Decision = GazelleFELPrecreate::FenceDecision;
+    unsigned freed=0;
+    CDVDMessageQueue queue("gazelle-linked-inflight-decoder-lease");
+    queue.Init(); queue.SetMaxDataSize(10000);
+    Fence fence(queue,50);
+    for (int id=310; id<312; ++id) {
+      auto original=Original(id,false,&freed);
+      assert(fence.EnqueueOriginal(original)==Decision::Submitted);
+      original.reset();
+      auto dequeued=NextPacket(queue);
+      assert(fence.PrepareOriginalLease(dequeued,20)==Decision::LeasePrepared);
+    }
+    auto started=fence.BeginOriginalLease();
+    assert(started && started.original->GetPacket()->iStreamId==310);
+    assert(fence.InFlightForAuditOnly() && fence.PreparedForAuditOnly()==1);
+    std::mutex signalMutex;
+    std::condition_variable signal;
+    bool workerBegan=false, finishExternal=false;
+    std::atomic<bool> finished{false};
+    std::thread worker([&] {
+      {
+        std::lock_guard<std::mutex> guard(signalMutex);
+        workerBegan=true;
+      }
+      signal.notify_all();
+      {
+        std::unique_lock<std::mutex> guard(signalMutex);
+        signal.wait(guard,[&] {return finishExternal;});
+      }
+      // Simulated external native work has completed. Do not hold the
+      // producer seek lock across any portion of that blocking wait.
+      started.original.reset();
+      assert(fence.FinishOriginalLease(started.token));
+      finished.store(true);
+    });
+    {
+      std::unique_lock<std::mutex> guard(signalMutex);
+      assert(signal.wait_for(guard,std::chrono::seconds(5),
+                             [&] {return workerBegan;}));
+    }
+    assert(fence.PublishBarrier([](std::uint64_t) {
+      return std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH);
+    },10)==Decision::Submitted);
+    // Queued original #311 is revoked, but in-flight #310 is still live.
+    assert(fence.PreparedForAuditOnly()==0 && fence.InFlightForAuditOnly());
+    assert(freed==1);
+    assert(fence.BarrierApplied(2,11)==Decision::Refused);
+    std::shared_ptr<CDVDMsg> flush; int priority=0;
+    assert(queue.Get(flush,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(flush->IsType(CDVDMsg::GENERAL_FLUSH));
+    flush.reset();
+    {
+      std::lock_guard<std::mutex> guard(signalMutex);
+      finishExternal=true;
+    }
+    signal.notify_all();
+    worker.join();
+    assert(finished.load() && freed==2 && !fence.InFlightForAuditOnly());
+    assert(fence.BarrierApplied(2,12)==Decision::Applied);
+    assert(queue.GetDataSize()==0);
+    fence.Close(); queue.End();
+  }
+
   std::puts("GAZELLE_KODI_TYPED_BRIDGE_LINK_HOST_PASS "
             "original_kodi_queue_and_messages=true "
             "borrow_epoch_from_original=true priority_flush_overtake=true "
@@ -625,6 +730,9 @@ int main() {
             "postseek_retry_admission_blocks_priority10=true "
             "prequeued_retry_still_requires_worker_fence=true "
             "postseek_stale_retry_burst_64_does_not_starve_flush=true "
+            "prepared_originals_revoked_on_seek=true "
+            "inflight_lease_blocks_barrier_until_finish=true "
+            "blocking_external_work_outside_fence_lock=true "
             "external_platform_demux_shims=true "
             "no_real_worker=true no_device=true fel_switch_off=true");
 }

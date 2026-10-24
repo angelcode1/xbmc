@@ -35,7 +35,6 @@ int main()
     auto first = Make(1, freed), second = Make(2, freed), third = Make(3, freed);
     auto firstAlias = first;
     auto* firstId = first.get();
-    auto* secondId = second.get();
     assert(lease.Prepare(first, 1, 100) == Result::Prepared && !first);
     assert(lease.Prepare(firstAlias, 1, 100) == Result::CallerRetains);
     assert(firstAlias && firstAlias.get() == firstId);

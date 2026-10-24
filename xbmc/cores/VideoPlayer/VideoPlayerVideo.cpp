@@ -627,14 +627,19 @@ void CVideoPlayerVideo::Process()
     {
       // The original CDVDMsgDemuxerPacket still owns this DemuxPacket and
       // all of its timestamps, side-data, flags and crypto metadata.
-      // Only the permanently disabled stream-change research path can inspect
-      // the first immutable in-band AU before opening the STOCK codec.
-      // Parsed FEL/MEL identity never selects any OMX alias here.
+      // The compile-time disabled initial/stream-change research seam may
+      // inspect the original immutable in-band AU before opening STOCK only.
+      // Dual-track P7 arrives as separate BL and EL DemuxPackets. Those layers
+      // are currently paired inside MediaCodec::AddData AFTER codec creation;
+      // this one-packet pre-create probe cannot authenticate such a pair.
+      // Refuse individual dual-track packets until a separately reviewed,
+      // epoch-aware message-owner pairing handoff exists. No OMX alias here.
       if (m_gazelleDeferredStockOpen)
       {
         const auto pending = std::static_pointer_cast<CDVDMsgDemuxerPacket>(pMsg);
         const DemuxPacket* original = pending->GetPacket();
-        if (original && !pending->GetPacketDrop() && original->iSize > 0)
+        if (original && !pending->GetPacketDrop() && original->iSize > 0 &&
+            !original->isDualStream && !original->isELPackage)
         {
           const auto classification = GazelleFEL::InspectFirstAU(
               original->pData, static_cast<std::size_t>(original->iSize),

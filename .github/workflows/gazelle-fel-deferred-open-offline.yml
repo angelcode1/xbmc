@@ -23,6 +23,8 @@ on:
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiProducerEpoch.h
       - tests/TestGazelleFELProducerEpoch.cpp
       - tests/TestGazelleActualKodiQueueHost.py
+      - tests/TestGazelleKodiProducerStampSource.py
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h
       - xbmc/cores/VideoPlayer/DVDMessageQueue.cpp
       - xbmc/cores/VideoPlayer/DVDMessageQueue.h
       - tools/gazelle-fel/compile-android-kodi-tus.py
@@ -47,6 +49,10 @@ jobs:
           set -euo pipefail
           python3 -S tools/gazelle-fel/verify-deferred-open-source.py --selftest
           python3 -S tools/gazelle-fel/verify-deferred-open-source.py
+      - name: Reject fabricated packet generations in typed Kodi bridge
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleKodiProducerStampSource.py
       - name: Compile real shared Kodi scheduling policy as C++17
         run: |
           set -euo pipefail

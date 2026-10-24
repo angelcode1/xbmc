@@ -11,6 +11,9 @@
 // Compile-check the real Kodi message-owner adapter in the ARMv7 TU;
 // it is intentionally not instantiated or called by the video worker.
 #include "DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h"
+// Compile-check producer-stamped original Kodi message/priority barrier types.
+// No live video-worker or playback path calls this research-only adapter.
+#include "DVDCodecs/Video/GazelleFELPrecreateKodiProducerEpoch.h"
 #include "utils/GazelleFELPrecreateProbe.h"
 
 #include "DVDCodecs/DVDCodecUtils.h"

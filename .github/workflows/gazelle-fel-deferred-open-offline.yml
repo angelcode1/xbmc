@@ -52,6 +52,8 @@ on:
       - tests/stubs/libdovi/rpu_parser.h
       - docs/GAZELLE_FEL_ANDROID_MASTER_PLAN.md
       - tools/gazelle-fel/audit-coreelec-first-init.py
+      - tools/gazelle-fel/audit-fireos-original-mode-writers.py
+      - docs/GAZELLE_FEL_P1_NATIVE_MODE_WRITER_GATE.md
       - tools/gazelle-fel/README-CE-DELTA.md
       - tools/gazelle-fel/verify-deferred-open-source.py
   workflow_dispatch:
@@ -72,6 +74,10 @@ jobs:
           set -euo pipefail
           python3 -S tools/gazelle-fel/audit-coreelec-first-init.py --selftest --kodi-root .
           python3 -S tools/gazelle-fel/audit-coreelec-first-init.py --verify-upstream --kodi-root .
+      - name: Test original Fire OS mode-writer audit without proprietary ELF
+        run: |
+          set -euo pipefail
+          python3 -S tools/gazelle-fel/audit-fireos-original-mode-writers.py --selftest
       - name: Refuse unsafe source modification
         run: |
           set -euo pipefail

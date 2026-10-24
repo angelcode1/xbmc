@@ -22,6 +22,9 @@ on:
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELProducerEpoch.h
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiProducerEpoch.h
       - tests/TestGazelleFELProducerEpoch.cpp
+      - tests/TestGazelleActualKodiQueueHost.py
+      - xbmc/cores/VideoPlayer/DVDMessageQueue.cpp
+      - xbmc/cores/VideoPlayer/DVDMessageQueue.h
       - tools/gazelle-fel/compile-android-kodi-tus.py
       - tests/TestGazelleCompileCommands.py
       - tests/stubs/libdovi/rpu_parser.h
@@ -110,6 +113,11 @@ jobs:
             -fsanitize=undefined -fno-sanitize-recover=all \
             tests/TestGazelleFELProducerEpoch.cpp -o /tmp/gazelle-producer-stamp-ubsan
           /tmp/gazelle-producer-stamp-ubsan
+      - name: Execute actual Kodi message queue method bodies with host platform shims
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleActualKodiQueueHost.py
+          python3 -S tests/TestGazelleActualKodiQueueHost.py --ubsan
       - name: Reject spoofed Android compiler commands (host-only)
         run: |
           set -euo pipefail

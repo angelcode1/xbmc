@@ -16,6 +16,8 @@ on:
       - tests/TestGazelleFELAuthenticRpu.cpp
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateOwners.h
       - tests/TestGazelleFELPrecreateOwners.cpp
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateEpochQueue.h
+      - tests/TestGazelleFELPrecreateEpochQueue.cpp
       - tools/gazelle-fel/compile-android-kodi-tus.py
       - tests/TestGazelleCompileCommands.py
       - tests/stubs/libdovi/rpu_parser.h
@@ -78,6 +80,19 @@ jobs:
             -fsanitize=undefined -fno-sanitize-recover=all \
             tests/TestGazelleFELPrecreateOwners.cpp -o /tmp/gazelle-original-owners-ubsan
           /tmp/gazelle-original-owners-ubsan
+      - name: Model producer-stamped priority flush ordering and seek epochs
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -pthread \
+            tests/TestGazelleFELPrecreateEpochQueue.cpp -o /tmp/gazelle-epoch-model
+          /tmp/gazelle-epoch-model
+      - name: Repeat epoch ordering under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic -pthread \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELPrecreateEpochQueue.cpp -o /tmp/gazelle-epoch-model-ubsan
+          /tmp/gazelle-epoch-model-ubsan
       - name: Reject spoofed Android compiler commands (host-only)
         run: |
           set -euo pipefail

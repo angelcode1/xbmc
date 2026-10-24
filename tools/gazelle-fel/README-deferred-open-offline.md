@@ -29,6 +29,16 @@ python3 -S tools/gazelle-fel/verify-deferred-open-source.py
 
 These tests **do not compile Kodi** and do not prove Android thread correctness. They inspect source structure and fail closed if the disabled feature changes, the timeout or first-packet ordering guard disappears, source references to a research alias are introduced or stock creation is removed. Their expected final line includes `target_compile=NOT_TESTED on_device=NOT_TESTED`.
 
+## 24 October 2026 — CI compilation of shared policy (not full Kodi)
+
+Created `xbmc/cores/VideoPlayer/GazelleDeferredOpenPolicy.h`, compiled as part of the existing `VideoPlayerVideo.cpp` source include and directly as the *same header* in `tests/TestGazelleDeferredStockPolicy.cpp`. The C++17 policy is **hard-disabled via constant and static_assert**, verifies an HEVC/P7/EL/unprotected/worker-stream-change *candidate* only, and refuses eight missing or unsuitable eligibility properties. **It is not an FEL/MEL parser.**
+
+A new `.github/workflows/gazelle-fel-deferred-open-offline.yml` runs only on this isolated research branch and performs the source-regression script (nine negative mutations), GCC C++17 `-Wall -Wextra -Werror -pedantic` compilation, UBSan runtime, and explicit no-device/not-full-Kodi-build markers. Previous workflow passes: https://github.com/angelcode1/xbmc/actions/runs/40055043588 and https://github.com/angelcode1/xbmc/actions/runs/40055084723. The source checker must still **not** be described as compiling Kodi's entire `VideoPlayerVideo.cpp`: that translation unit depends on Android/Kodi/FFmpeg libraries and has **not** been built with the target toolchain here.
+
+A local exact GitHub-blob-matched copy of the shared header and source test compiled with both GCC and Clang+UBSan. Clang caught and led to a correction of an unused test counter; reruns passed. The candidate decision still cannot be enabled, cannot select a research OMX alias, and cannot establish genuine FEL.
+
+The staged worker's stock-factory failure branch formerly called `StopThread()` from the video worker; corrected to set `m_bStop = true` and send `PLAYER_ABORT`, allowing the external thread owner to handle joins. A new source regression condition refuses any self-join in `GazelleEnsureDeferredStockCodec`. This is a **non-deployable fail-closed safety correction**, not a demonstrated Android runtime recovery path.
+
 ## Source-lifetime restrictions
 
 - The video worker can receive `MSGQ_TIMEOUT` and call `ProcessDecoderOutput` even before any packet. Pending mode must guard this path before a null `m_pVideoCodec` dereference. The optional branch currently waits up to 500 ms and then uses stock; this is **not an owner-approved timing parameter** or a production latency claim.

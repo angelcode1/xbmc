@@ -288,7 +288,9 @@ bool CVideoPlayerVideo::GazelleEnsureDeferredStockCodec()
     return true;
   CLog::Log(LOGERROR, "Gazelle disabled-research pending stock codec failed to open");
   m_messageParent.Put(std::make_shared<CDVDMsg>(CDVDMsg::PLAYER_ABORT));
-  StopThread();
+  // This helper runs on the video worker: do not StopThread()/join self.
+  // The normal process-loop exit and CloseStream join are owned elsewhere.
+  m_bStop = true;
   return false;
 }
 

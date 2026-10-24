@@ -84,6 +84,10 @@ public:
   {
     if (!original || bytes == 0 || bytes > GazelleFELPairing::kMaxLayerPacketBytes)
       return AwaitHoldResult::InvalidOriginal;
+    // Closed/revoked holders may not silently reopen on a later seek.
+    // The caller must construct a fresh gate after stream reset/close.
+    if (m_closed)
+      return AwaitHoldResult::CallerMustRetain;
     if (ClassifyEpoch(packetEpoch, publishedEpoch, appliedEpoch) != Admission::AwaitBarrier)
       return AwaitHoldResult::NotAwaitingBarrier;
     if (m_size != 0 && m_epoch != packetEpoch)
@@ -160,6 +164,7 @@ public:
 
   void Close() noexcept
   {
+    m_closed = true;
     for (auto& original : m_original)
       original.reset();
     ClearMetadata();
@@ -180,6 +185,7 @@ private:
   std::uint64_t m_firstTicks{0};
   std::size_t m_size{0};
   std::size_t m_bytes{0};
+  bool m_closed{false};
 };
 
 static_assert(kMaxAwaitBarrierOwners == 2, "At most one BL+EL original pair");

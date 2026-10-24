@@ -128,6 +128,17 @@ def check(cpp: str, h: str, policy: str) -> None:
         and "CDVDVideoCodec::VC_REOPEN" in cpp
         and "CDVDMsg::GENERAL_FLUSH, sync), 1" in cpp
     )
+    # Future retry-fence and bounded owner-holder prototypes must NOT
+    # sneak into the real worker before synchronized producer/worker ingress,
+    # decoder handoff, and barrier fairness are all proved. Their host CI is
+    # evidence of the unwired policy only.
+    guards["nonblocking_retry_fence_unwired"] = (
+        '#include "DVDCodecs/Video/GazelleFELPrecreateSeekFence.h"' not in cpp
+        and '#include "DVDCodecs/Video/GazelleFELAwaitBarrierOwners.h"' not in cpp
+        and "GazelleFELPrecreate::SeekFence<" not in cpp
+        and "TryEnqueueDecoderRetry(" not in cpp
+        and "GazelleFELPrecreate::AwaitBarrierOwners<" not in cpp
+    )
     # Kodi's actual DVDDemuxFFmpeg marks BL and EL as separate messages
     # (isDualStream/isELPackage). MediaCodec pairs them only AFTER opening.
     # The dormant first-AU probe reads only one packet, so it MUST NOT
@@ -187,6 +198,9 @@ def selftest(cpp: str, h: str, policy: str) -> None:
                      "OpenStream(hint, std::move(codec));"), h, policy),
         (cpp, h, policy.replace("UseDeferredInitialStock(const DeferredStockInputs& v)",
                                 "UseDeferredInitialCodec(const DeferredStockInputs& v)")),
+        (cpp + '\n#include "DVDCodecs/Video/GazelleFELPrecreateSeekFence.h"\n',
+         h, policy),
+        (cpp + "\n// TryEnqueueDecoderRetry(packet);\n", h, policy),
         (cpp.replace("SendMessage(msg, 10);", "SendMessage(msg, 0);"), h, policy),
         (cpp.replace("!original->isDualStream && !original->isELPackage",
                      "true && !original->isELPackage"), h, policy),
@@ -205,7 +219,7 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         except AssertionError:
             continue
         raise AssertionError("NEGATIVE_MUTATION_ACCEPTED")
-    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=22 no_device=true")
+    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=24 no_device=true")
 
 
 def main() -> None:

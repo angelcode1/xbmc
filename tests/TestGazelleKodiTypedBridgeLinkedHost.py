@@ -214,6 +214,14 @@ def main() -> None:
             shutil.copyfile(source,output)
             assert hashlib.sha256(source.read_bytes()).digest()== \
                    hashlib.sha256(output.read_bytes()).digest()
+        # The REAL bridge spells this include using Kodi's repo-root path.
+        # Publish the very same unchanged message header at that path.
+        real_message_header=QUEUE/"DVDMessage.h"
+        bridge_message_header=dest/"cores/VideoPlayer/DVDMessage.h"
+        bridge_message_header.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copyfile(real_message_header,bridge_message_header)
+        assert hashlib.sha256(real_message_header.read_bytes()).digest()== \
+               hashlib.sha256(bridge_message_header.read_bytes()).digest()
         for name,code in FAKES.items():
             if name == "DVDMessage.h":
                 continue

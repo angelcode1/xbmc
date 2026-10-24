@@ -195,20 +195,22 @@ int main() {
     int priority=0;
     assert(queue.Get(next,std::chrono::milliseconds(0),priority)==MSGQ_OK);
     assert(priority==10 && next.get()==oldId);
-    const auto oldAgain=std::static_pointer_cast<CDVDMsgDemuxerPacket>(next);
+    auto oldAgain=std::static_pointer_cast<CDVDMsgDemuxerPacket>(next);
     assert(oldAgain->GetGazelleResearchEpoch()==1);
     // Producer knows epoch 2 already, but worker's PairOwners would still
     // be at epoch 1 until the priority-1 control was processed. DO NOT pair.
     next.reset();
     assert(freed==0); // oldAgain still holds the original owner
+    oldAgain.reset();
+    assert(freed==1); // same original freed once; no fabricated raw owner
+    priority=0; // Kodi Get uses priority as minimum requested priority
     assert(queue.Get(next,std::chrono::milliseconds(0),priority)==MSGQ_OK);
     assert(priority==1 && next->IsType(CDVDMsg::GENERAL_FLUSH));
     next.reset();
-    assert(freed==0);
+    assert(freed==1);
     assert(queue.GetDataSize()==0); // priority-10 retry is not ordinary bytes
-    // No destructor until the last original message owner goes away.
     queue.End();
-    assert(freed==0);
+    assert(freed==1);
   }
 
   // In a real queue, a timed-out one-original hold leaves the queue's data

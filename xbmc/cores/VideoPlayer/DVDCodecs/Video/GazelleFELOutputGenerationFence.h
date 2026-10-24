@@ -101,6 +101,11 @@ public:
       m_poisoned = true;
       return false;
     }
+    // Only a successfully returned native stop invalidates old codec
+    // output indices. Closing the model by itself is not such evidence.
+    for (auto& slot : m_slots)
+      if (slot.live && slot.ticket.decoder == m_decoder)
+        slot.invalidated = true;
     m_stopVerified = true;
     return true;
   }
@@ -139,7 +144,7 @@ public:
     if (!empty)
       return std::nullopt;
     const Ticket ticket{m_decoder, m_generation, m_nextTicket++, index};
-    *empty = Slot{ticket, true, 0};
+    *empty = Slot{ticket, true, 0, false};
     return ticket;
   }
 
@@ -153,8 +158,8 @@ public:
       return {Decision::Invalid, std::nullopt};
     if (slot->operation)
       return {Decision::Busy, std::nullopt};
-    if (m_phase != Phase::Running || ticket.decoder != m_decoder ||
-        ticket.generation != m_generation)
+    if (m_phase != Phase::Running || slot->invalidated ||
+        ticket.decoder != m_decoder || ticket.generation != m_generation)
       return {Decision::Stale, std::nullopt};
     if (!NewOperationAvailable())
       return {Decision::Refused, std::nullopt};
@@ -181,9 +186,13 @@ public:
     return true;
   }
 
-  // Late returns after seek or after decoder recreation are dropped WITHOUT
-  // a native release. Returning an index from the current running generation
-  // through this method is forbidden; such indices need BeginRelease.
+  // Late renderer returns can retire indices WITHOUT JNI only AFTER native
+  // flush returned without exception, or native stop was independently
+  // acknowledged. Seek publication / BeginNativeFlush / Close alone cannot
+  // invalidate an output: doing so before a native response could hide an
+  // owner still belonging to the active codec. This operation models receipt
+  // of the genuine final renderer-owner return, NOT cancellation of a live
+  // renderer reference. No production renderer callback is wired here.
   Decision RetireStaleWithoutJNI(const Ticket& ticket) noexcept
   {
     std::lock_guard<std::mutex> hold(m_mutex);
@@ -192,8 +201,9 @@ public:
       return Decision::Invalid;
     if (slot->operation)
       return Decision::Busy;
-    if (m_phase == Phase::Running && ticket.decoder == m_decoder &&
-        ticket.generation == m_generation)
+    if (!slot->invalidated ||
+        (m_phase == Phase::Running && ticket.decoder == m_decoder &&
+         ticket.generation == m_generation))
       return Decision::Refused;
     slot->live = false;
     return Decision::Stale;
@@ -240,6 +250,13 @@ public:
       m_phase = Phase::Faulted;
       return true; // recorded failure, NOT a success acknowledgment
     }
+    // Android's documented MediaCodec.flush contract invalidates old
+    // indices only upon successful return. Renderer references still exist;
+    // invalidation is NOT owner retirement or hardware quiescence.
+    for (auto& slot : m_slots)
+      if (slot.live && slot.ticket.decoder == m_decoder &&
+          slot.ticket.generation == m_generation)
+        slot.invalidated = true;
     m_phase = Phase::AwaitRetirement;
     return true;
   }
@@ -315,6 +332,7 @@ private:
     Ticket ticket{};
     bool live{false};
     std::uint64_t operation{0};
+    bool invalidated{false};
   };
   static bool Same(const Ticket& lhs, const Ticket& rhs) noexcept
   {

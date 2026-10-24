@@ -26,6 +26,12 @@ def check(model: str, worker: str | None = None, codec: str | None = None) -> No
         "flush_waits_for_native_releases":
             "m_phase != Phase::FlushPending || OperationsInFlightLocked()" in model,
         "seek_only_after_jni": "m_phase = Phase::AwaitRetirement;" in model,
+        "stale_retire_needs_native_ack": "if (!slot->invalidated ||" in model,
+        "jni_flush_mints_invalidation":
+            "slot.ticket.generation == m_generation)\n        slot.invalidated = true;" in model,
+        "jni_stop_mints_invalidation":
+            "slot.ticket.decoder == m_decoder)\n        slot.invalidated = true;" in model,
+        "new_tickets_not_invalidated": "Slot{ticket, true, 0, false}" in model,
         "held_renderer_owner_gate": "OutstandingLocked() != 0" in model,
         "full_barrier_gate": "m_rendererVerified && !OperationsInFlightLocked() &&" in model
                              and "OutstandingLocked() == 0" in model,
@@ -70,6 +76,12 @@ def main() -> None:
         model.replace("m_phase != Phase::FlushPending || OperationsInFlightLocked()",
                       "m_phase != Phase::FlushPending"),
         model.replace("m_phase = Phase::AwaitRetirement;", "m_phase = Phase::Running;"),
+        model.replace("if (!slot->invalidated ||", "if (false ||"),
+        model.replace("slot.ticket.generation == m_generation)\n        slot.invalidated = true;",
+                      "slot.ticket.generation == m_generation)\n        slot.invalidated = false;"),
+        model.replace("slot.ticket.decoder == m_decoder)\n        slot.invalidated = true;",
+                      "slot.ticket.decoder == m_decoder)\n        slot.invalidated = false;"),
+        model.replace("Slot{ticket, true, 0, false}", "Slot{ticket, true, 0, true}"),
         model.replace("OutstandingLocked() != 0", "false"),
         model.replace("m_rendererVerified && !OperationsInFlightLocked() &&",
                       "true && !OperationsInFlightLocked() &&"),
@@ -78,7 +90,7 @@ def main() -> None:
         model.replace("if (!jniSucceeded)", "if (false)"),
         model.replace("OFFLINE, HOST-ONLY MODEL", "PRODUCTION READY"),
     ]
-    assert len(mutations) == 12
+    assert len(mutations) == 16
     for n, mutant in enumerate(mutations):
         if mutant == model:
             raise AssertionError(f"GAZELLE_MUTATION_NOOP {n}")
@@ -98,7 +110,7 @@ def main() -> None:
                 continue
             raise AssertionError("GAZELLE_LIVE_WIRING_MUTATION_ACCEPTED")
     print("GAZELLE_OUTPUT_GENERATION_SOURCE_PASS "
-          f"negative={14 if worker is not None else 12} "
+          f"negative={18 if worker is not None else 16} "
           "output_model_unwired=true native_quiescence_unproven=true fel_off=true")
 
 if __name__ == "__main__":

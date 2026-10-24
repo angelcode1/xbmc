@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - research/gazelle-fel-deferred-open-offline-20261024
+      - research/gazelle-fireos-fel-20261019
+      - research/gazelle-fel-output-invalidation-order-20261024
     paths:
       - .github/workflows/gazelle-fel-deferred-open-offline.yml
       - xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
@@ -154,7 +156,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -S tests/TestGazelleMediaCodecQuiescenceSource.py
-      - name: Audit unwired output-generation fence and 14 fail-closed mutations
+      - name: Audit unwired output-generation fence and 18 fail-closed mutations
         run: |
           set -euo pipefail
           python3 -S tests/TestGazelleFELOutputGenerationSource.py

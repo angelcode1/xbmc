@@ -17,7 +17,6 @@ int main()
 
   assert(EligibleForDeferredStock(eligible));
   assert(!UseDeferredStock(eligible));
-  unsigned rejects=0;
   for (unsigned i=0;i<8;i++)
   {
     auto input=eligible;
@@ -34,7 +33,6 @@ int main()
     }
     assert(!EligibleForDeferredStock(input));
     assert(!UseDeferredStock(input));
-    rejects++;
   }
   // A P7 enhancement-present flag makes *only a candidate*. Neither the
   // header nor the worker treats it as verified FEL-vs-MEL identity.

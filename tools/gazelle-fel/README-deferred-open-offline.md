@@ -39,6 +39,18 @@ A local exact GitHub-blob-matched copy of the shared header and source test comp
 
 The staged worker's stock-factory failure branch formerly called `StopThread()` from the video worker; corrected to set `m_bStop = true` and send `PLAYER_ABORT`, allowing the external thread owner to handle joins. A new source regression condition refuses any self-join in `GazelleEnsureDeferredStockCodec`. This is a **non-deployable fail-closed safety correction**, not a demonstrated Android runtime recovery path.
 
+## 24 October 2026 — read-only first-AU RPU probe staged in actual Kodi source
+
+Added `xbmc/utils/GazelleFELPrecreateProbe.h` (no NAL rewrites): the source checks first-AU length-prefixed HEVC framing (≤16 MiB, ≤512 NAL, ≤64 KiB RPU), requires base VCL, EL NAL type 63 and **one** RPU NAL 62, enforces valid HEVC headers, rejects protected or malformed data, and then uses `dovi_parse_unspec62_nalu` / `dovi_rpu_get_header` under `HAVE_LIBDOVI`. It returns FEL only when the parsed header has **guessed_profile=7** and **el_type="FEL"**; similarly MEL. Header and RPU receive independent libdovi frees, exactly matching the connected upstream C ABI ownership implementation. If built without libdovi, unknown is returned.
+
+The actual disabled path in `VideoPlayerVideo.cpp` now calls this header on the **original message-owned `DemuxPacket`**, before `GazelleEnsureDeferredStockCodec()`. It does not allocate, copy or edit the packet and never uses the classified type to choose a decoder; the compile-time policy still fixes `kDeferredStockResearchEnabled=false`, so no live execution is possible in this checkpoint. **This staged seam currently covers stream changes in an already running worker, not the initial stream's first codec open.** Even a true libdovi FEL result would not prove any native EL/residual output.
+
+Added `tests/TestGazelleFELPrecreateProbe.cpp` and `tests/stubs/libdovi/rpu_parser.h` with an **EXPLICITLY FAKE libdovi ABI double**, not a genuine library. The host test checks 10 malformed/unsafe AU cases, FEL/MEL/unknown/profile/P8 branching, separate header/RPU frees, protected fallback, and AU size limit. The source audit now requires correct probe→stock factory→ordinary packet ordering, and rejects 10 source mutations.
+
+**Successful GitHub Actions:** [40056672402](https://github.com/angelcode1/xbmc/actions/runs/40056672402). Its completed successful steps included source audit, shared production policy compile, policy UBSan, fake libdovi probe compile/run and probe UBSan. Earlier two CI runs failed because the static checker still expected the *old* direct packet guard text; the checker was corrected to verify the new read-only probe ordering and rerun successfully. The pass does **NOT** include: libdovi 3.3.2 real runtime parsing, Android ARMv7 Kodi `VideoPlayerVideo.cpp` target compilation, actual queue/thread timing, a working P7 decoder or FEL visual output.
+
+The repo's `tools/depends/target/libdovi/LIBDOVI-VERSION` pins **3.3.2**; its `BitstreamConverter.cpp` already calls the same C-API on NAL62 after codec creation. The new precreate classifier is separately scoped and keeps every uncertain result on stock. Do not enable/ship, alter Magisk, replace an OMX ELF or run on the Cube. Full Kodi Android compile and genuine clean in-process parsing are still required; R0 independently bootable recovery remains NO-GO.
+
 ## Source-lifetime restrictions
 
 - The video worker can receive `MSGQ_TIMEOUT` and call `ProcessDecoderOutput` even before any packet. Pending mode must guard this path before a null `m_pVideoCodec` dereference. The optional branch currently waits up to 500 ms and then uses stock; this is **not an owner-approved timing parameter** or a production latency claim.

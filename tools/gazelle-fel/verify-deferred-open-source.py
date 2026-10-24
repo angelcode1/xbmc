@@ -108,6 +108,15 @@ def check(cpp: str, h: str, policy: str) -> None:
         and 'original->cryptoInfo != nullptr' in packet_section
         and 'static_cast<bool>(m_hints.cryptoSession)' in packet_section
     )
+    # Kodi's actual DVDDemuxFFmpeg marks BL and EL as separate messages
+    # (isDualStream/isELPackage). MediaCodec pairs them only AFTER opening.
+    # The dormant first-AU probe reads only one packet, so it MUST NOT
+    # authenticate a split P7 pair or imply complete FEL pre-create.
+    guards["split_layer_packets_refused_precreate"] = (
+        "if (original && !pending->GetPacketDrop() && original->iSize > 0 &&\n"
+        "            !original->isDualStream && !original->isELPackage)" in packet_section
+        and "GazelleFEL::InspectFirstAU(" in packet_section
+    )
     timeout_gate = "if (m_gazelleDeferredStockOpen)\n      {"
     output_check = "if (m_outputSate == OUTPUT_AGAIN &&"
     guards["timeout_before_output"] = (
@@ -150,6 +159,10 @@ def selftest(cpp: str, h: str, policy: str) -> None:
                      "OpenStream(hint, std::move(codec));"), h, policy),
         (cpp, h, policy.replace("UseDeferredInitialStock(const DeferredStockInputs& v)",
                                 "UseDeferredInitialCodec(const DeferredStockInputs& v)")),
+        (cpp.replace("!original->isDualStream && !original->isELPackage",
+                     "true && !original->isELPackage"), h, policy),
+        (cpp.replace("!original->isDualStream && !original->isELPackage",
+                     "!original->isDualStream && true"), h, policy),
         (cpp.replace(
             "else if (pMsg->IsType(CDVDMsg::GENERAL_RESET))",
             "else if (pMsg->IsType(CDVDMsg::GENERAL_NEVER_RESET))"), h, policy),
@@ -163,7 +176,7 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         except AssertionError:
             continue
         raise AssertionError("NEGATIVE_MUTATION_ACCEPTED")
-    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=15 no_device=true")
+    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=17 no_device=true")
 
 
 def main() -> None:

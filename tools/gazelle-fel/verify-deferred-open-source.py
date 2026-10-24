@@ -29,6 +29,10 @@ def check(cpp: str, h: str, policy: str) -> None:
             '#include "DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h"' in cpp
             and "GazelleFELPrecreateKodi::ObserveOriginal(" not in cpp
             and "GazelleFELPrecreateKodi::BorrowInfo(" not in cpp,
+        "kodi_producer_epoch_adapter_compiled_but_unwired":
+            '#include "DVDCodecs/Video/GazelleFELPrecreateKodiProducerEpoch.h"' in cpp
+            and "GazelleFELPrecreateKodi::ResearchProducerIngress(" not in cpp
+            and "GazelleFELPrecreateKodi::ResearchProducerIngress producer" not in cpp,
         "candidate_without_implicit_fel":
             "hint.dovi.dv_profile == 7" in cpp
             and "hint.dovi.el_present_flag != 0" in cpp
@@ -159,6 +163,10 @@ def selftest(cpp: str, h: str, policy: str) -> None:
                      "DVDCodecs/Video/GazelleFELPrecreateMissing.h"), h, policy),
         (cpp + "\n// GazelleFELPrecreateKodi::ObserveOriginal(bridge, packet, epoch, protected);\n",
          h, policy),
+        (cpp.replace("DVDCodecs/Video/GazelleFELPrecreateKodiProducerEpoch.h",
+                     "DVDCodecs/Video/GazelleFELPrecreateMissingProducer.h"), h, policy),
+        (cpp + "\n// GazelleFELPrecreateKodi::ResearchProducerIngress producer(queue);\n",
+         h, policy),
         (cpp.replace("GazelleFEL::InspectFirstAU(", "GazelleFEL::InspectMissingAU("),
          h, policy),
         (cpp.replace("IsGazelleDeferredStockCandidate(hint, false)",
@@ -184,7 +192,7 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         except AssertionError:
             continue
         raise AssertionError("NEGATIVE_MUTATION_ACCEPTED")
-    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=19 no_device=true")
+    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=21 no_device=true")
 
 
 def main() -> None:

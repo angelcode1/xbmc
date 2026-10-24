@@ -1,0 +1,263 @@
+name: Gazelle FEL Android ARMv7 two-TU compile (NO APK)
+
+on:
+  push:
+    branches:
+      - research/gazelle-fel-deferred-open-offline-20261024
+    paths:
+      - .github/workflows/gazelle-fel-android-two-tu-build.yml
+      - tools/gazelle-fel/compile-android-kodi-tus.py
+      - tools/gazelle-fel/verify-deferred-open-source.py
+      - tests/TestGazelleKodiProducerStampSource.py
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiProducerEpoch.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELProducerEpoch.h
+      - xbmc/cores/VideoPlayer/DVDMessage.h
+      - tests/TestGazelleDeferredStockPolicy.cpp
+      - xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+      - xbmc/cores/VideoPlayer/VideoPlayerVideo.h
+      - xbmc/cores/VideoPlayer/GazelleDeferredOpenPolicy.h
+      - xbmc/utils/GazelleFELPrecreateProbe.h
+      - xbmc/utils/BitstreamConverter.cpp
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  armv7-compile-only:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 300
+    env:
+      HOST: arm-linux-androideabi
+      DEBIAN_FRONTEND: noninteractive
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      TARBALLS: ${{ github.workspace }}/xbmc-tarballs
+      DEPENDS_PREFIX: ${{ github.workspace }}/xbmc-depends
+      BUILD_DIR: ${{ github.workspace }}/kodi-build
+      ANDROID_NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/28.2.13676358
+      MAKEFLAGS: -j2
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify checked-out Kodi source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          echo "GAZELLE_SOURCE_SHA=$actual"
+          echo "GAZELLE_WORKFLOW_SHA=${{ github.sha }}"
+          if [ "${{ github.repository }}" = "angelcode1/xbmc" ] && [ "$actual" != "${{ github.sha }}" ]; then
+            echo "::error::Kodi source checkout does not match workflow commit"
+            exit 1
+          fi
+
+      - name: Preserve hard-disable and pinned source gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = research/gazelle-fel-deferred-open-offline-20261024
+          python3 -S tools/gazelle-fel/verify-deferred-open-source.py
+          python3 -S tools/gazelle-fel/verify-deferred-open-source.py --selftest
+          python3 -S tests/TestGazelleKodiProducerStampSource.py
+          grep -Fxq 'VERSION=3.3.2' tools/depends/target/libdovi/LIBDOVI-VERSION
+          echo GAZELLE_ANDROID_ARMV7_SOURCE_PIN_PASS
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install host packages
+        run: |
+          set -eux
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            bison \
+            build-essential \
+            ccache \
+            cmake \
+            curl \
+            flex \
+            gawk \
+            gettext \
+            git \
+            gperf \
+            lib32stdc++6 \
+            lib32z1 \
+            lib32z1-dev \
+            libcurl4-openssl-dev \
+            libtool \
+            meson \
+            ninja-build \
+            openjdk-17-jdk \
+            pkg-config \
+            python3 \
+            python3-pip \
+            unzip \
+            zip \
+            zlib1g-dev
+
+      - name: Install pinned Android SDK/NDK r28c
+        run: |
+          set -eux
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+          curl -L -o /tmp/android-commandlinetools.zip \
+            https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q /tmp/android-commandlinetools.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
+          mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
+          # Android's SDK NDK server occasionally returns a truncated ZIP.
+          # Retry only within this ephemeral CI environment.
+          installed=0
+          for attempt in 1 2 3; do
+            if "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" \
+                "platform-tools" \
+                "platforms;android-37.0" \
+                "build-tools;37.0.0" \
+                "ndk;28.2.13676358"; then
+              installed=1
+              break
+            fi
+            echo "::warning::SDK NDK download/extract failed, attempt $attempt"
+            rm -rf "$ANDROID_SDK_ROOT/ndk/28.2.13676358"
+            sleep 10
+          done
+          test "$installed" = 1
+          test -x "$ANDROID_SDK_ROOT/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi28-clang"
+          ls -la "$ANDROID_SDK_ROOT/ndk"
+
+      - name: Bootstrap and configure Android depends
+        run: |
+          set -eux
+          cd tools/depends
+          ./bootstrap
+          ./configure \
+            --with-tarballs="$TARBALLS" \
+            --host="$HOST" \
+            --with-sdk-path="$ANDROID_SDK_ROOT" \
+            --with-ndk-path="$ANDROID_SDK_ROOT/ndk/28.2.13676358" \
+            --prefix="$DEPENDS_PREFIX" \
+            --disable-ccache
+
+      - name: Build Android depends
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/gazelle-ci-logs"
+          logfile="$GITHUB_WORKSPACE/gazelle-ci-logs/android-depends.log"
+          echo "GAZELLE_DEPENDS_START quiet=1 logfile=$logfile"
+          df -h "$GITHUB_WORKSPACE"
+          free -m
+          make -C tools/depends -j2 V=0 >"$logfile" 2>&1 &
+          build_pid=$!
+          while kill -0 "$build_pid" 2>/dev/null; do
+            sleep 75
+            echo "GAZELLE_DEPENDS_HEARTBEAT pid=$build_pid log_bytes=$(wc -c < "$logfile")"
+            df -h "$GITHUB_WORKSPACE" | tail -n 1
+            free -m | grep -E 'Mem:|Swap:' || true
+            tail -n 1 "$logfile" | cut -c 1-200 || true
+          done
+          if wait "$build_pid"; then
+            echo "GAZELLE_DEPENDS_BUILD_PASS"
+            tail -n 35 "$logfile"
+          else
+            status=$?
+            echo "GAZELLE_DEPENDS_BUILD_FAIL exit=$status"
+            grep -E -i '(fatal error|\berror:|\*\*\*|no space left|killed|failed|out of memory)' "$logfile" | tail -n 100 || true
+            tail -n 130 "$logfile"
+            exit "$status"
+          fi
+
+      - name: Configure Kodi CMake build
+        run: |
+          set -eux
+          make -C tools/depends/target/cmakebuildsys BUILD_DIR="$BUILD_DIR" CMAKE_EXTRA_ARGUMENTS='-DCMAKE_EXPORT_COMPILE_COMMANDS=ON'
+          test -s "$BUILD_DIR/compile_commands.json"
+
+      - name: Materialize Kodi internal FFmpeg before compiling direct translation units
+        shell: bash
+        run: |
+          set -euo pipefail
+          # FindFFMPEG.cmake's BUILD_DEP_TARGET creates "build-ffmpeg" and
+          # installs libavutil/pixfmt.h into Kodi's generated include tree.
+          # Direct compile_commands execution does not honor dependencies.
+          logfile="$RUNNER_TEMP/gazelle-ffmpeg-target.log"
+          if cmake --build "$BUILD_DIR" --target build-ffmpeg --parallel 2 >"$logfile" 2>&1; then
+            echo GAZELLE_ANDROID_FFMPEG_PREREQUISITE_PASS
+            tail -n 24 "$logfile"
+          else
+            code=$?
+            echo "::error::Kodi internal FFmpeg prerequisite failed before any of the requested TUs"
+            grep -E -i '(fatal error|error:|no space left|killed|failed)' "$logfile" | tail -n 55 || true
+            tail -n 90 "$logfile"
+            exit "$code"
+          fi
+          if ! find "$BUILD_DIR" -type f -path '*/libavutil/pixfmt.h' -print -quit | grep -q .; then
+            echo "::error::FFmpeg target returned success but libavutil/pixfmt.h is absent"
+            exit 1
+          fi
+
+      - name: Materialize Kodi Fmt and Spdlog before direct translation-unit compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          # FindFmt.cmake supplies the internal build-fmt ExternalProject;
+          # FindSpdlog.cmake requires Fmt and supplies build-spdlog.
+          # Raw compiler invocations bypass the CMake target dependency graph.
+          logfile="$RUNNER_TEMP/gazelle-fmt-spdlog-prereqs.log"
+          if cmake --build "$BUILD_DIR" --target build-fmt build-spdlog --parallel 2 >"$logfile" 2>&1; then
+            echo GAZELLE_ANDROID_FMT_SPDLOG_PREREQUISITES_PASS
+            tail -n 30 "$logfile"
+          else
+            code=$?
+            echo '::error::Kodi Fmt/Spdlog prerequisites failed before translation-unit compile'
+            grep -E -i '(fatal error|error:|no space left|killed|failed)' "$logfile" | tail -n 70 || true
+            tail -n 100 "$logfile"
+            exit "$code"
+          fi
+          if ! find "$BUILD_DIR" -type f -path '*/fmt/format.h' -print -quit | grep -q .; then
+            echo '::error::build-fmt succeeded but generated fmt/format.h is missing'
+            exit 1
+          fi
+          if ! find "$BUILD_DIR" -type f -path '*/spdlog/spdlog.h' -print -quit | grep -q .; then
+            echo '::error::build-spdlog succeeded but generated spdlog/spdlog.h is missing'
+            exit 1
+          fi
+      - name: Materialize Kodi PCRE2 before direct translation-unit compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Kodi FindPCRE2.cmake builds the internal build-pcre2 ExternalProject.
+          # The raw Clang compile_commands call bypasses this header prerequisite.
+          logfile="$RUNNER_TEMP/gazelle-pcre2-prerequisite.log"
+          if cmake --build "$BUILD_DIR" --target build-pcre2 --parallel 2 >"$logfile" 2>&1; then
+            echo GAZELLE_ANDROID_PCRE2_PREREQUISITE_PASS
+            tail -n 24 "$logfile"
+          else
+            code=$?
+            echo '::error::Kodi PCRE2 prerequisite failed before requested TUs'
+            grep -E -i '(fatal error|error:|no space left|killed|failed)' "$logfile" | tail -n 55 || true
+            tail -n 90 "$logfile"
+            exit "$code"
+          fi
+          if ! find "$BUILD_DIR" -type f -name pcre2.h -print -quit | grep -q .; then
+            echo '::error::build-pcre2 succeeded but pcre2.h is missing'
+            exit 1
+          fi
+      - name: Compile exactly the two real Android Kodi translation units
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -S tools/gazelle-fel/compile-android-kodi-tus.py "$BUILD_DIR/compile_commands.json" "$GITHUB_WORKSPACE"
+          echo GAZELLE_ANDROID_TWO_TU_BUILD_PASS no_apk=true full_link=false no_device=true

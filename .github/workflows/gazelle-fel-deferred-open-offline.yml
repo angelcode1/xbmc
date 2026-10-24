@@ -1,0 +1,284 @@
+name: Gazelle FEL deferred-open source-only CI
+
+on:
+  push:
+    branches:
+      - research/gazelle-fel-deferred-open-offline-20261024
+    paths:
+      - .github/workflows/gazelle-fel-deferred-open-offline.yml
+      - xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+      - xbmc/cores/VideoPlayer/VideoPlayerVideo.h
+      - xbmc/cores/VideoPlayer/GazelleDeferredOpenPolicy.h
+      - tests/TestGazelleDeferredStockPolicy.cpp
+      - xbmc/utils/GazelleFELPrecreateProbe.h
+      - tests/TestGazelleFELPrecreateProbe.cpp
+      - tests/TestGazelleFELRealLibdovi.cpp
+      - tests/TestGazelleFELAuthenticRpu.cpp
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateOwners.h
+      - tests/TestGazelleFELPrecreateOwners.cpp
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateEpochQueue.h
+      - tests/TestGazelleFELPrecreateEpochQueue.cpp
+      - xbmc/cores/VideoPlayer/DVDMessage.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELProducerEpoch.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiProducerEpoch.h
+      - tests/TestGazelleFELProducerEpoch.cpp
+      - tests/TestGazelleActualKodiQueueHost.py
+      - tests/TestGazelleKodiQueueObjectLink.py
+      - tests/TestGazelleKodiQueueRealMessageHeaders.py
+      - tests/TestGazelleKodiTypedBridgeLinkedHost.py
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateAdmission.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELAwaitBarrierOwners.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateSeekFence.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateDispatchLease.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELOutputGenerationFence.h
+      - tests/TestGazelleFELOutputGenerationFence.cpp
+      - tests/TestGazelleFELOutputGenerationSource.py
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELNativeQuiescenceGate.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp
+      - tests/TestGazelleFELNativeQuiescenceGate.cpp
+      - tests/TestGazelleMediaCodecQuiescenceSource.py
+      - tests/TestGazelleFELPrecreateDispatchLease.cpp
+      - tests/TestGazelleFELAwaitBarrierOwners.cpp
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h
+      - xbmc/cores/VideoPlayer/DVDMessage.cpp
+      - tests/TestGazelleKodiProducerStampSource.py
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h
+      - xbmc/cores/VideoPlayer/DVDMessageQueue.cpp
+      - xbmc/cores/VideoPlayer/DVDMessageQueue.h
+      - tools/gazelle-fel/compile-android-kodi-tus.py
+      - tests/TestGazelleCompileCommands.py
+      - tests/stubs/libdovi/rpu_parser.h
+      - tools/gazelle-fel/verify-deferred-open-source.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Refuse unsafe source modification
+        run: |
+          set -euo pipefail
+          python3 -S tools/gazelle-fel/verify-deferred-open-source.py --selftest
+          python3 -S tools/gazelle-fel/verify-deferred-open-source.py
+      - name: Reject fabricated packet generations in typed Kodi bridge
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleKodiProducerStampSource.py
+      - name: Compile real shared Kodi scheduling policy as C++17
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleDeferredStockPolicy.cpp -o /tmp/gazelle-deferred-policy
+          /tmp/gazelle-deferred-policy
+      - name: Repeat under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleDeferredStockPolicy.cpp -o /tmp/gazelle-deferred-ubsan
+          /tmp/gazelle-deferred-ubsan
+      - name: Compile and test P7 first-AU probe using FAKE libdovi ABI
+        run: |
+          set -euo pipefail
+          # Explicit stub: tests safe framing/cleanup/control flow, not real RPU semantics.
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            -Itests/stubs tests/TestGazelleFELPrecreateProbe.cpp -o /tmp/gazelle-rpu-probe-stub
+          /tmp/gazelle-rpu-probe-stub
+      - name: Compile fake RPU probe under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            -Itests/stubs tests/TestGazelleFELPrecreateProbe.cpp -o /tmp/gazelle-rpu-probe-ubsan
+          /tmp/gazelle-rpu-probe-ubsan
+      - name: Verify original demux-message owner gate and seek epochs (host-only)
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELPrecreateOwners.cpp -o /tmp/gazelle-original-owners
+          /tmp/gazelle-original-owners
+      - name: Repeat message-owner gate under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELPrecreateOwners.cpp -o /tmp/gazelle-original-owners-ubsan
+          /tmp/gazelle-original-owners-ubsan
+      - name: Model producer-stamped priority flush ordering and seek epochs
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -pthread \
+            tests/TestGazelleFELPrecreateEpochQueue.cpp -o /tmp/gazelle-epoch-model
+          /tmp/gazelle-epoch-model
+      - name: Repeat epoch ordering under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic -pthread \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELPrecreateEpochQueue.cpp -o /tmp/gazelle-epoch-model-ubsan
+          /tmp/gazelle-epoch-model-ubsan
+      - name: Test bounded await-barrier original-owner backpressure and deadline (host)
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELAwaitBarrierOwners.cpp -o /tmp/gazelle-await-barrier
+          /tmp/gazelle-await-barrier
+      - name: Repeat await-barrier ownership under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELAwaitBarrierOwners.cpp -o /tmp/gazelle-await-barrier-ubsan
+          /tmp/gazelle-await-barrier-ubsan
+      - name: Test two-phase cancellable original dispatch leases (host)
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELPrecreateDispatchLease.cpp -o /tmp/gazelle-dispatch-lease
+          /tmp/gazelle-dispatch-lease
+      - name: Repeat two-phase original dispatch leases under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELPrecreateDispatchLease.cpp -o /tmp/gazelle-dispatch-lease-ubsan
+          /tmp/gazelle-dispatch-lease-ubsan
+      - name: Audit real Kodi JNI flush and output lifetime, refuse fabricated native proof
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleMediaCodecQuiescenceSource.py
+      - name: Audit unwired output-generation fence and 14 fail-closed mutations
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleFELOutputGenerationSource.py
+      - name: Test output-generation lease, JNI permits and renderer-held outputs (host)
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -pthread \
+            tests/TestGazelleFELOutputGenerationFence.cpp -o /tmp/gazelle-output-generation
+          /tmp/gazelle-output-generation
+      - name: Repeat output-generation host tests under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic -pthread \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELOutputGenerationFence.cpp -o /tmp/gazelle-output-generation-ubsan
+          /tmp/gazelle-output-generation-ubsan
+      - name: Test synthetic native quiescence witness requirements
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELNativeQuiescenceGate.cpp -o /tmp/gazelle-native-evidence
+          /tmp/gazelle-native-evidence
+      - name: Repeat native quiescence witness under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELNativeQuiescenceGate.cpp -o /tmp/gazelle-native-evidence-ubsan
+          /tmp/gazelle-native-evidence-ubsan
+      - name: Verify Kodi-like producer-time original message stamp (C++17)
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic -pthread \
+            tests/TestGazelleFELProducerEpoch.cpp -o /tmp/gazelle-producer-stamp
+          /tmp/gazelle-producer-stamp
+      - name: Repeat producer stamp and priority flush under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic -pthread \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELProducerEpoch.cpp -o /tmp/gazelle-producer-stamp-ubsan
+          /tmp/gazelle-producer-stamp-ubsan
+      - name: Execute actual Kodi message queue method bodies with host platform shims
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleActualKodiQueueHost.py
+          python3 -S tests/TestGazelleActualKodiQueueHost.py --ubsan
+      - name: Link unmodified Kodi queue source and producer epoch (host shims)
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleKodiQueueObjectLink.py
+          python3 -S tests/TestGazelleKodiQueueObjectLink.py --ubsan
+      - name: Link actual Kodi DVDMessage.h and packet owner methods with unchanged queue
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleKodiQueueRealMessageHeaders.py
+          python3 -S tests/TestGazelleKodiQueueRealMessageHeaders.py --ubsan
+      - name: Execute real Kodi typed BL EL owner bridge with unchanged queue and packet methods
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleKodiTypedBridgeLinkedHost.py
+          python3 -S tests/TestGazelleKodiTypedBridgeLinkedHost.py --ubsan
+      - name: Reject spoofed Android compiler commands (host-only)
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleCompileCommands.py
+      - name: Explicit limitation notice
+        run: |
+          echo 'GAZELLE_KODI_DEFERRED_OFFLINE_CI_PASS compiled_shared_policy=true'
+          echo 'FULL_KODI_ANDROID_BUILD=NOT_TESTED'
+          echo 'MEDIACODEC_RUNTIME=NOT_TESTED'
+          echo 'FEL_RPU_PARSER=SOURCE_CONNECTED_DISABLED_REAL_LIBDOVI_NOT_RUNTIME_TESTED'
+          echo 'CUBE_UNTOUCHED=true'
+
+  real-libdovi-abi:
+    # Debian forky's 3.3.2-3+b1 rebuild has the COMPLETE libdovi header.
+    # Ubuntu resolute 3.3.2-3 ships a truncated 281-byte header (bug #1124682).
+    # Host ABI check only: not a Kodi or Android build.
+    runs-on: ubuntu-24.04
+    container: debian:forky
+    timeout-minutes: 12
+    steps:
+      - name: Install real packaged libdovi 3.3.2 and C++ compiler
+        run: |
+          set -eu
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates curl git g++ libdovi-dev pkg-config
+          dpkg-query -W -f='libdovi-dev=${Version}\n' libdovi-dev
+          test "$(dpkg-query -W -f='${Version}' libdovi-dev | cut -d- -f1)" = "3.3.2"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile/link/execute production first-AU probe against REAL libdovi
+        run: |
+          set -eu
+          test -f /usr/include/libdovi/rpu_parser.h
+          grep -Fq dovi_parse_unspec62_nalu /usr/include/libdovi/rpu_parser.h
+          test "$(wc -c < /usr/include/libdovi/rpu_parser.h)" -gt 10000
+          echo '=== INSTALLED HEADER DECLARATIONS ==='
+          sed -n '1,180p' /usr/include/libdovi/rpu_parser.h
+          echo '=== EXPORTS ==='
+          nm -D /usr/lib/x86_64-linux-gnu/libdovi.so | grep -E 'dovi_parse_unspec62_nalu|dovi_rpu_get_header|dovi_rpu_free' || true
+          echo '=== COMPILE REAL ABI ==='
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELRealLibdovi.cpp -ldovi -o /tmp/gazelle-real-libdovi
+          ldd /tmp/gazelle-real-libdovi | grep -F libdovi
+          /tmp/gazelle-real-libdovi
+          echo 'GAZELLE_REAL_LIBDOVI_HOST_ABI_GATE_PASS full_kodi_build=false real_FEL_fixture=false no_device=true'
+      - name: Test genuine upstream Profile 7 FEL/MEL RPUs against libdovi
+        run: |
+          set -eu
+          # Public upstream test assets, pinned by Git blob SHA; no binary
+          # fixtures are copied into this repository or uploaded as artifacts.
+          base='https://raw.githubusercontent.com/quietvoid/dovi_tool/libdovi-3.3.2/assets/tests'
+          curl --proto '=https' --tlsv1.2 -fLsS --retry 3 \
+            "$base/fel_orig.bin" -o /tmp/gazelle-upstream-fel.bin
+          curl --proto '=https' --tlsv1.2 -fLsS --retry 3 \
+            "$base/mel_orig.bin" -o /tmp/gazelle-upstream-mel.bin
+          test "$(git hash-object /tmp/gazelle-upstream-fel.bin)" = \
+            a7926febb39043d938ebc49dce0a4c043b5b32f0
+          test "$(git hash-object /tmp/gazelle-upstream-mel.bin)" = \
+            09b8963ddaee4e2c5554b9682987a72278edf53c
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELAuthenticRpu.cpp -ldovi -o /tmp/gazelle-rpu-authentic
+          /tmp/gazelle-rpu-authentic \
+            /tmp/gazelle-upstream-fel.bin /tmp/gazelle-upstream-mel.bin

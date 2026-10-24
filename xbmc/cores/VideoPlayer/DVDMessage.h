@@ -12,6 +12,7 @@
 #include "cores/IPlayer.h"
 
 #include <atomic>
+#include <cstdint>
 #include <string.h>
 #include <string>
 
@@ -298,8 +299,25 @@ public:
   DemuxPacket* GetPacket() { return m_packet; }
   unsigned int GetPacketSize();
   bool GetPacketDrop() { return m_drop; }
+
+  // Gazelle compile-only research: an optional PRODUCER-issued generation for
+  // the ORIGINAL demux message. Zero means never tagged (normal Kodi path).
+  // Set exactly once BEFORE CDVDMessageQueue::Put; the queue mutex publishes
+  // the initialized tag to the worker. Never infer it at worker dequeue.
+  // The feature switch remains compile-time false; stock callers do not tag.
+  bool TrySetGazelleResearchEpoch(std::uint64_t epoch) noexcept
+  {
+    if (epoch == 0 || m_gazelleResearchEpoch != 0)
+      return false;
+    m_gazelleResearchEpoch = epoch;
+    return true;
+  }
+  std::uint64_t GetGazelleResearchEpoch() const noexcept { return m_gazelleResearchEpoch; }
+
   DemuxPacket* m_packet;
   bool m_drop;
+private:
+  std::uint64_t m_gazelleResearchEpoch{0};
 };
 
 class CDVDMsgDemuxerReset : public CDVDMsg

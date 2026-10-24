@@ -20,6 +20,7 @@
 #include "utils/BitstreamStats.h"
 
 #include <atomic>
+#include <chrono>
 
 #define DROP_DROPPED 1
 #define DROP_VERYLATE 2
@@ -100,7 +101,10 @@ protected:
 
   EOutputState OutputPicture(const VideoPicture* src);
   void ProcessOverlays(const VideoPicture* pSource, double pts);
-  void OpenStream(CDVDStreamInfo& hint, std::unique_ptr<CDVDVideoCodec> codec);
+  void OpenStream(CDVDStreamInfo& hint,
+                  std::unique_ptr<CDVDVideoCodec> codec,
+                  bool gazelleDeferStock = false);
+  bool GazelleEnsureDeferredStockCodec();
 
   void ResetFrameRateCalc();
   void CalcFrameRate();
@@ -139,6 +143,10 @@ protected:
   CDVDMessageQueue& m_messageParent;
   CDVDStreamInfo m_hints;
   std::unique_ptr<CDVDVideoCodec> m_pVideoCodec;
+  // Gazelle pre-create scheduling experiment. Disabled in its source guard.
+  // Only the video worker may read/write this state after stream messages.
+  bool m_gazelleDeferredStockOpen{false};
+  std::chrono::steady_clock::time_point m_gazelleDeferredSince{};
   CPtsTracker m_ptsTracker;
   std::list<DVDMessageListItem> m_packets;
   CDroppingStats m_droppingStats;

@@ -84,7 +84,70 @@ int main() {
     auto r=InspectFirstAU(v.data(),kMaxPrecreateAU+1,h.data(),h.size(),false);
     assert(r.type==PrecreateRpuType::Unknown);
   }
-  std::cout<<"GAZELLE_FEL_PRECREATE_PROBE_HOST_PASS malformed=10 "
+
+  // Annex B transport (3/4-byte mixed start codes) must also be recognized
+  // WITHOUT hvcC. Parser allocation accounting remains real in this fake FFI.
+  const auto asAnnexB=[](uint8_t marker) {
+    const auto source=sample(marker);
+    std::vector<uint8_t> output;
+    std::size_t p=0;
+    unsigned n=0;
+    while(p<source.size()) {
+      const std::size_t len=source[p+3];
+      output.insert(output.end(),(n++%2)?std::initializer_list<uint8_t>{0,0,1}:
+                                          std::initializer_list<uint8_t>{0,0,0,1});
+      output.insert(output.end(),source.begin()+p+4,source.begin()+p+4+len);
+      p+=4+len;
+    }
+    return output;
+  };
+  for(const uint8_t marker:{uint8_t{1},uint8_t{2}}) {
+    const auto v=asAnnexB(marker);
+    const int before=parses;
+    const auto r=InspectFirstAU(v.data(),v.size(),nullptr,0,false);
+    assert(r.framingValid && r.bl && r.el && r.rpu && parses==before+1);
+    assert(r.type==(marker==1?PrecreateRpuType::FEL:PrecreateRpuType::MEL));
+  }
+  {
+    auto v=asAnnexB(1);
+    const int before=parses;
+    assert(InspectFirstAU(v.data(),v.size(),nullptr,0,true).type==PrecreateRpuType::Unknown);
+    assert(parses==before);
+    // Leading-zero padding is ambiguous and must fail closed, not resync.
+    v.insert(v.begin(),0);
+    assert(InspectFirstAU(v.data(),v.size(),nullptr,0,false).type==PrecreateRpuType::Unknown);
+    assert(parses==before);
+  }
+  {
+    auto v=asAnnexB(1);
+    const int before=parses;
+    v.insert(v.end(),{0,0,1,0x7c,1,1}); // second, ambiguous RPU
+    assert(InspectFirstAU(v.data(),v.size(),nullptr,0,false).type==PrecreateRpuType::Unknown);
+    assert(parses==before);
+  }
+  {
+    auto v=asAnnexB(1);
+    const int before=parses;
+    v.insert(v.end(),{0,0,0,1}); // empty trailing NAL
+    assert(InspectFirstAU(v.data(),v.size(),nullptr,0,false).type==PrecreateRpuType::Unknown);
+    assert(parses==before);
+  }
+  {
+    auto v=asAnnexB(1);
+    // Boundary on start-code immediately after a VCL NAL.
+    v.resize(v.size()-7); // remove final EL including its start code
+    const int before=parses;
+    assert(InspectFirstAU(v.data(),v.size(),nullptr,0,false).type==PrecreateRpuType::Unknown);
+    assert(parses==before);
+  }
+  {
+    auto v=asAnnexB(1);
+    const int before=parses;
+    v[5]=0; // invalid BL temporal_id_plus1
+    assert(InspectFirstAU(v.data(),v.size(),nullptr,0,false).type==PrecreateRpuType::Unknown);
+    assert(parses==before);
+  }
+  std::cout<<"GAZELLE_FEL_PRECREATE_PROBE_HOST_PASS malformed=10 annexb_negative=5 "
              "fel_mel_unknown_separate=true rpu_free_once=true "
              "protected_stock=true libdovi=FAKE_ABI_NO_REAL_PARSE "
              "live_fel=false no_device=true\n";

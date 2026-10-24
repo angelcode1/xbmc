@@ -12,6 +12,7 @@
 // Do not use this class in real playback, decoder selection or APK builds.
 #include "GazelleFELAwaitBarrierOwners.h"
 #include "GazelleFELPrecreateAdmission.h"
+#include "GazelleFELPrecreateDispatchLease.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -29,6 +30,8 @@ enum class FenceDecision : std::uint8_t
   Applied,             // Worker reported that its real flush ran
   Committed,           // Callback synchronously accepted original for stock
   AwaitHeld,           // Original held pending worker-applied flush
+  LeasePrepared,       // Original staged, not yet given to any decoder
+  InFlight,            // Original lease begun; must finish before flush
   Backpressure,        // Caller still owns original; must stop/wait/recover
   UntaggedStockOnly,   // Never qualify for precreate pairing
   StaleDropped,        // Old original owner released without stock replay
@@ -41,6 +44,7 @@ class SeekFence
 public:
   using Owner = std::shared_ptr<Message>;
   using Hold = AwaitBarrierOwners<Message>;
+  using Dispatch = DispatchLease<Message>;
 
   explicit SeekFence(Queue& queue, std::uint64_t maxWaitTicks,
                      std::uint64_t initialEpoch = 1)
@@ -74,6 +78,9 @@ public:
     if (!barrier || static_cast<int>(m_queue.Put(barrier, 1)) != 1)
       return FenceDecision::Refused;
     m_published = next;
+    // Revoke all PREPARED codec dispatches atomically with publication.
+    // An in-flight decoder original remains externally owned until finish.
+    m_dispatch.RevokePrepared();
     // Expire a prior-generation held owner without handing it to stock.
     m_holder.DropSuperseded(m_published, m_applied, nowTicks);
     return FenceDecision::Submitted;
@@ -85,7 +92,7 @@ public:
                                std::uint64_t nowTicks)
   {
     std::lock_guard<std::mutex> guard(m_mutex);
-    if (m_closed || epoch == 0 ||
+    if (m_closed || m_dispatch.InFlight() || epoch == 0 ||
         m_applied == std::numeric_limits<std::uint64_t>::max() ||
         epoch != m_applied + 1 || epoch > m_published)
       return FenceDecision::Refused;
@@ -126,6 +133,64 @@ public:
       return FenceDecision::Backpressure;
     original.reset();
     return FenceDecision::Submitted;
+  }
+
+  // A TWO-PHASE lease model for original Kodi packet owners already
+  // dequeued from CDVDMessageQueue. Stage is under the seek publication lock,
+  // but Begin returns the original shared message for work OUTSIDE that lock.
+  // Never feed a decoder directly in one of these locked methods. Cancellation
+  // before Begin destroys staged originals; a running lease cannot be
+  // revoked, so BarrierApplied refuses to flush until Finish.
+  FenceDecision PrepareOriginalLease(Owner& original, std::size_t bytes)
+  {
+    std::lock_guard<std::mutex> guard(m_mutex);
+    if (m_closed || !original)
+      return FenceDecision::Refused;
+    const auto stamp = original->GetGazelleResearchEpoch();
+    const auto admission = ClassifyEpoch(stamp, m_published, m_applied);
+    if (admission == Admission::StaleReject)
+    {
+      original.reset();
+      return FenceDecision::StaleDropped;
+    }
+    if (admission != Admission::MetadataOnly)
+      return admission == Admission::AwaitBarrier
+                 ? FenceDecision::Backpressure : FenceDecision::Refused;
+    const auto result = m_dispatch.Prepare(original, stamp, bytes);
+    if (result == LeasePrepare::Prepared)
+      return FenceDecision::LeasePrepared;
+    return result == LeasePrepare::CallerRetains
+               ? FenceDecision::Backpressure : FenceDecision::Refused;
+  }
+
+  typename Dispatch::Started BeginOriginalLease() noexcept
+  {
+    std::lock_guard<std::mutex> guard(m_mutex);
+    if (m_closed || m_published != m_applied)
+      return {};
+    return m_dispatch.Begin(m_published);
+  }
+
+  // Release the modeled in-flight lease marker after the external caller
+  // reports decoder work complete. Must be called even if the external
+  // operation failed. This does NOT cancel native codec work or prove it
+  // has stopped; that promise belongs to future real Kodi integration.
+  bool FinishOriginalLease(std::uint64_t token) noexcept
+  {
+    std::lock_guard<std::mutex> guard(m_mutex);
+    return m_dispatch.Finish(token);
+  }
+
+  bool InFlightForAuditOnly() const
+  {
+    std::lock_guard<std::mutex> guard(m_mutex);
+    return m_dispatch.InFlight();
+  }
+
+  std::size_t PreparedForAuditOnly() const
+  {
+    std::lock_guard<std::mutex> guard(m_mutex);
+    return m_dispatch.Queued();
   }
 
   // The returned enum is NOT permission for caller to feed a decoder:
@@ -219,12 +284,14 @@ public:
     std::lock_guard<std::mutex> guard(m_mutex);
     m_closed = true;
     m_holder.Close();
+    m_dispatch.Close();
   }
 
 private:
   Queue& m_queue;
   mutable std::mutex m_mutex;
   Hold m_holder;
+  Dispatch m_dispatch;
   std::uint64_t m_published;
   std::uint64_t m_applied;
   bool m_closed{false};

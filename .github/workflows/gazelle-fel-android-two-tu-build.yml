@@ -222,6 +222,27 @@ jobs:
             echo '::error::build-spdlog succeeded but generated spdlog/spdlog.h is missing'
             exit 1
           fi
+      - name: Materialize Kodi PCRE2 before direct translation-unit compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Kodi FindPCRE2.cmake builds the internal build-pcre2 ExternalProject.
+          # The raw Clang compile_commands call bypasses this header prerequisite.
+          logfile="$RUNNER_TEMP/gazelle-pcre2-prerequisite.log"
+          if cmake --build "$BUILD_DIR" --target build-pcre2 --parallel 2 >"$logfile" 2>&1; then
+            echo GAZELLE_ANDROID_PCRE2_PREREQUISITE_PASS
+            tail -n 24 "$logfile"
+          else
+            code=$?
+            echo '::error::Kodi PCRE2 prerequisite failed before requested TUs'
+            grep -E -i '(fatal error|error:|no space left|killed|failed)' "$logfile" | tail -n 55 || true
+            tail -n 90 "$logfile"
+            exit "$code"
+          fi
+          if ! find "$BUILD_DIR" -type f -name pcre2.h -print -quit | grep -q .; then
+            echo '::error::build-pcre2 succeeded but pcre2.h is missing'
+            exit 1
+          fi
       - name: Compile exactly the two real Android Kodi translation units
         shell: bash
         run: |

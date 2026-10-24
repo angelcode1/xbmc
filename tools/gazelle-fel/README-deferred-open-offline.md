@@ -51,6 +51,27 @@ Added `tests/TestGazelleFELPrecreateProbe.cpp` and `tests/stubs/libdovi/rpu_pars
 
 The repo's `tools/depends/target/libdovi/LIBDOVI-VERSION` pins **3.3.2**; its `BitstreamConverter.cpp` already calls the same C-API on NAL62 after codec creation. The new precreate classifier is separately scoped and keeps every uncertain result on stock. Do not enable/ship, alter Magisk, replace an OMX ELF or run on the Cube. Full Kodi Android compile and genuine clean in-process parsing are still required; R0 independently bootable recovery remains NO-GO.
 
+## 24 October 2026 — REAL libdovi 3.3.2 host ABI gate PASS
+
+**Verified GitHub Actions:** [run 40058234002](https://github.com/angelcode1/xbmc/actions/runs/40058234002) completed **success** in BOTH `source-only` and `real-libdovi-abi` jobs.
+
+The dedicated container uses `debian:forky` and installs **libdovi-dev 3.3.2-3+b1**, checks `RPU_PARSER_MAJOR/MINOR/PATCH=3.3.2`, verifies that `/usr/include/libdovi/rpu_parser.h` is a complete header (over 10 KiB with `dovi_parse_unspec62_nalu` declaration), and compiles/links/runs `tests/TestGazelleFELRealLibdovi.cpp` against the **actual libdovi shared library**. Observed markers:
+
+```text
+libdovi-dev=3.3.2-3+b1
+GAZELLE_FEL_REAL_LIBDOVI_ABI_PASS version=3.3.2 linked_real_library=true invalid_input_unknown=true no_authenticated_FEL_fixture=true kodi_android_build=false no_device=true
+GAZELLE_REAL_LIBDOVI_HOST_ABI_GATE_PASS full_kodi_build=false real_FEL_fixture=false no_device=true
+```
+
+Earlier real-library attempts revealed **two distinct findings**:
+
+1. The original `DoviRpuOpaque`/`DoviRpuDataHeader` type spellings in this branch's new probe **and existing `BitstreamConverter.cpp`** did not match the pinned real libdovi 3.3.2 API. The isolated branch now uses `auto*`/`const auto*` deduced from the `dovi_*` functions. This was required to make the production probe compile with its actual header, not just with the synthetic FFI stub. The base/working Kodi branch was not modified.
+2. Ubuntu resolute's `libdovi-dev 3.3.2-3` package has a **truncated 281-byte** `rpu_parser.h` exposing only version macros, while the shared library exports `dovi_*`. The CI initially failed before source compilation. This corresponds to Debian [bug 1124682](https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1124682) about a truncated generated header; Debian's `3.3.2-3+b1` rebuild supplies a complete header. CI now refuses a truncated header rather than misdiagnosing missing declarations as a Kodi defect.
+
+**Scope limit:** this is genuine runtime execution of real libdovi with *intentionally invalid, synthetic* NAL62 payload, proving the ABI links and returns Unknown without failure. It does **not** prove a valid FEL versus MEL RPU produces the correct classification, that the full `VideoPlayerVideo.cpp`/existing late converter compiles with Android's target dependencies, or that any EL residual decoding works. The first-open Kodi codec remains synchronous, and the source feature is **hard-disabled**. No APK was generated or installed; R0 recovery remains unverified.
+
+**Next actionable gates:** compile the full Android Kodi worker and late converter on an isolated build host, then test against independently validated clear-content FEL and MEL metadata (no private disc assets committed). Only then review initial-stream pre-create lifetime and native decoder requirements.
+
 ## Source-lifetime restrictions
 
 - The video worker can receive `MSGQ_TIMEOUT` and call `ProcessDecoderOutput` even before any packet. Pending mode must guard this path before a null `m_pVideoCodec` dereference. The optional branch currently waits up to 500 ms and then uses stock; this is **not an owner-approved timing parameter** or a production latency claim.

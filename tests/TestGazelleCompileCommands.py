@@ -67,6 +67,19 @@ with tempfile.TemporaryDirectory() as temp:
     bad = json.loads(json.dumps(entries))
     bad.pop()
     run(bad, False, "COMPILATION_UNIT_NOT_UNIQUE")
+    # Only source-reviewed CMake ExternalProject targets may be auto-built,
+    # and only for an actual, single, unambiguous missing-header diagnostic.
+    recover = mod.recoverable_prerequisite
+    assert recover("fatal error: 'pcre2.h' file not found", set()) == "build-pcre2"
+    assert recover("fatal error: 'nlohmann/json.hpp' file not found", set()) == "build-nlohmann_json"
+    assert recover("fatal error: 'tinyxml2.h' file not found", set()) == "build-tinyxml2"
+    assert recover("fatal error: 'unknown.h' file not found", set()) is None
+    assert recover("fatal error: 'pcre2.h' file not found", {"build-pcre2"}) is None
+    assert recover("error: bad application source", set()) is None
+    assert recover(
+        "fatal error: 'pcre2.h' file not found\\n"
+        "fatal error: 'fmt/format.h' file not found", set()
+    ) is None
     print("GAZELLE_ANDROID_COMPILE_COMMANDS_SOURCE_SELFTEST_PASS "
-          "negative=6 exact_tus=true armv7_only=true "
+          "negative=13 exact_tus=true armv7_only=true "
           "real_android_compilation=false no_device=true")

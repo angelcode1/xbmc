@@ -147,6 +147,28 @@ New [run 40063601810](https://github.com/angelcode1/xbmc/actions/runs/4006360181
 
 The decoder remains hard OFF (`kDeferredStockResearchEnabled=false`, compile-time static assert). This is only a CI build-order adjustment, not a change to production Kodi, FFmpeg library versions, startup paths, Android media services, Magisk, device binaries or FEL activation.
 
+## 24 October 2026 — PCRE2 prebuild correction and bounded known-header recovery
+
+[Android ARMv7 CI 40063601810](https://github.com/angelcode1/xbmc/actions/runs/40063601810) completed **FAILURE** after passing SDK/NDK install, Kodi depends, CMake configuration and all explicit FFmpeg/Fmt/Spdlog prerequisites. This is a progressively later actual Android Clang step, but not a Gazelle source diagnostic:
+
+```text
+GAZELLE_ANDROID_FFMPEG_PREREQUISITE_PASS
+GAZELLE_ANDROID_FMT_SPDLOG_PREREQUISITES_PASS
+GAZELLE_ANDROID_ARMV7_TU_START path=xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+xbmc/utils/RegExp.h:20:10: fatal error: 'pcre2.h' file not found
+GAZELLE_ANDROID_TU_COMPILE_REFUSED GAZELLE_ANDROID_ARMV7_TU_FAIL xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp exit=1
+```
+
+The second TU, `BitstreamConverter.cpp`, was not attempted. `cmake/modules/FindPCRE2.cmake` confirms an internally built `build-pcre2` ExternalProject. The isolated workflow now builds that target, checks `pcre2.h` exists, and only then invokes the two real ARMv7 Clang compiler commands. First corrected run [40066737270](https://github.com/angelcode1/xbmc/actions/runs/40066737270) was still in progress when recorded.
+
+To avoid another complete 40+ minute dependency rebuild for *each* recognized generated header, `tools/gazelle-fel/compile-android-kodi-tus.py` now supports a **bounded, explicitly allowlisted** prerequisite recovery. It only triggers when Clang fails with one recognized `fatal error: '...' file not found`, invokes `cmake --build <Kodi build directory> --target <specific audited build-*> --parallel 2`, then retries the **exact same** previously validated ARMv7 TU command. Targets are restricted to internal FFmpeg, Fmt, Spdlog, PCRE2, NlohmannJSON, TinyXML2; at most six distinct recoveries per TU, no repeats. It does **not** retry on an unknown header, ambiguous diagnostic, source code error or build-prerequisite failure. It cannot build an APK, link Kodi, call ADB or change the device.
+
+`tests/TestGazelleCompileCommands.py` now covers seven recovery negative/positive cases in addition to the previous six compiler command attestation cases. The first test edit mistakenly used a double-escaped newline in the ambiguous-missing-header negative test and caused source CI failure; corrected to a real escaped newline without relaxing the single-error gate. The subsequent source-only job in [CI 40066974087](https://github.com/angelcode1/xbmc/actions/runs/40066974087) completed SUCCESS at the latest check. The genuine libdovi ABI job was still running at that instant; earlier real-libdovi genuine FEL/MEL CI already passed.
+
+The newest Android compile-only job with the corrected diagnostic parser and bounded recovery is [40066897467](https://github.com/angelcode1/xbmc/actions/runs/40066897467), which was **RUNNING**, not a target compilation pass, when recorded. Existing hourly Kodi Android completion check is retargeted to it. A true gate PASS still requires **both** exact `GAZELLE_ANDROID_ARMV7_TU_PASS` markers from the real Android CI job.
+
+As always, `kDeferredStockResearchEnabled=false`, stock codec-only scheduling, no real initial-open precreate hook, and NO-GO for native FEL/EL residual output and R0 recovery. The working Kodi installation, HDR10/P8, UDF/MMBD, satellite, HDMI passthrough and six Magisk modules remain untouched.
+
 ## Source-lifetime restrictions
 
 - The video worker can receive `MSGQ_TIMEOUT` and call `ProcessDecoderOutput` even before any packet. Pending mode must guard this path before a null `m_pVideoCodec` dereference. The optional branch currently waits up to 500 ms and then uses stock; this is **not an owner-approved timing parameter** or a production latency claim.

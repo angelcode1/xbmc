@@ -8,6 +8,9 @@
 
 #include "VideoPlayerVideo.h"
 #include "GazelleDeferredOpenPolicy.h"
+// Compile-check the real Kodi message-owner adapter in the ARMv7 TU;
+// it is intentionally not instantiated or called by the video worker.
+#include "DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h"
 #include "utils/GazelleFELPrecreateProbe.h"
 
 #include "DVDCodecs/DVDCodecUtils.h"

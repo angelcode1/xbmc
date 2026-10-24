@@ -57,7 +57,7 @@ def check(cpp: str, h: str, policy: str) -> None:
     speed_a = cpp.find("else if (pMsg->IsType(CDVDMsg::PLAYER_SETSPEED))", flush_a)
     reset_body = cpp[reset_a:flush_a] if 0 <= reset_a < flush_a else ""
     flush_body = cpp[flush_a:speed_a] if 0 <= flush_a < speed_a else ""
-    rearm = ("if (m_gazelleDeferredStockOpen)\\n"
+    rearm = ("if (m_gazelleDeferredStockOpen)\n"
              "        m_gazelleDeferredSince = std::chrono::steady_clock::now();")
     guards["reset_guard"] = (
         rearm in reset_body

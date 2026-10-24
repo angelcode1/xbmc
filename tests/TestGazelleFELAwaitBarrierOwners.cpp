@@ -162,11 +162,45 @@ int main()
     }
     assert(freed == 2);
   }
+  // A failed downstream handoff after flush MUST retain every owner with
+  // its original identity. Only an accepted all-or-nothing callback can
+  // transfer both originals out of the holder under the caller's lock.
+  {
+    int freed = 0;
+    Hold hold(200);
+    auto bl = Make(100, freed);
+    auto el = Make(101, freed);
+    auto* blIdentity = bl.get();
+    auto* elIdentity = el.get();
+    assert(hold.TryHold(bl, 2, 2, 1, 40, 20) == Result::HeldOriginal);
+    assert(hold.TryHold(el, 2, 2, 1, 60, 21) == Result::HeldOriginal);
+    assert(!hold.AcceptAfterBarrier(2, 1, 22,
+        [](const auto&, std::size_t) noexcept -> bool {return true;}));
+    assert(!hold.AcceptAfterBarrier(2, 2, 23,
+        [](const auto&, std::size_t) noexcept -> bool {return false;}));
+    assert(hold.Size() == 2 && hold.Bytes() == 100 && freed == 0);
+    std::array<std::shared_ptr<Original>, 2> accepted{};
+    assert(hold.AcceptAfterBarrier(2, 2, 24,
+        [&](const auto& original, std::size_t count) noexcept -> bool {
+          assert(count == 2 && original[0].get() == blIdentity &&
+                 original[1].get() == elIdentity);
+          accepted[0] = original[0];
+          accepted[1] = original[1];
+          return true;
+        }));
+    assert(hold.Size() == 0 && hold.Bytes() == 0 && freed == 0);
+    assert(!hold.AcceptAfterBarrier(2, 2, 25,
+        [](const auto&, std::size_t) noexcept -> bool {return true;}));
+    accepted[0].reset();
+    accepted[1].reset();
+    assert(freed == 2);
+  }
+
   std::cout << "GAZELLE_AWAIT_BARRIER_OWNERS_HOST_PASS "
                "capacity=2 declared_bytes_limit=33554432 "
                "preflush_no_stock=true caller_retains_on_backpressure=true "
                "deadline_retains_originals=true applied_flush_releases_once=true "
                "superseded_seek_drops_stale_once=true bad_epochs_refused=true "
-               "close_cannot_reopen=true "
+               "close_cannot_reopen=true rejected_handoff_retains_owners=true "
                "no_live_worker=true no_device=true fel_disabled=true\n";
 }

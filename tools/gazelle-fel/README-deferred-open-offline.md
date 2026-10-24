@@ -72,6 +72,31 @@ Earlier real-library attempts revealed **two distinct findings**:
 
 **Next actionable gates:** compile the full Android Kodi worker and late converter on an isolated build host, then test against independently validated clear-content FEL and MEL metadata (no private disc assets committed). Only then review initial-stream pre-create lifetime and native decoder requirements.
 
+## 24 October 2026 — authentic upstream FEL/MEL RPU classifications PASS
+
+Verified CI [run 40059636961](https://github.com/angelcode1/xbmc/actions/runs/40059636961) completed **SUCCESS** in both source-only and real-libdovi ABI jobs. The latter executed the production `GazelleFELPrecreateProbe.h` against **genuine libdovi 3.3.2** and pinned, upstream `quietvoid/dovi_tool` `libdovi-3.3.2` public RPU fixtures. It downloaded files only in the ephemeral CI container, did **not** check them into our repositories or upload them as artifacts, and verified original Git blob hashes:
+
+- `assets/tests/fel_orig.bin` (384 bytes), blob `a7926febb39043d938ebc49dce0a4c043b5b32f0`, independently identified by upstream `tests/rpu/info.rs` as **Profile 7 FEL**.
+- `assets/tests/mel_orig.bin` (183 bytes), blob `09b8963ddaee4e2c5554b9682987a72278edf53c`, sourced from upstream MEL metadata.
+
+The first attempt **correctly failed**: the upstream `.bin` file stores `0x00000001` followed by **raw 0x19-prefixed RPU data**, *not* a complete `0x7c01` HEVC NAL62 as Kodi sees in its stream. The test adapter was fixed to strip only the Annex B start code and prepend `0x7c 0x01` to the **unchanged RPU payload**; the production classifier was not weakened. Real libdovi then correctly returned FEL and MEL; both were independently passed through the production in-band first-AU scanner by wrapping them with **synthetic** BL and EL NALs, checking protected fallback and duplicate-RPU rejection.
+
+Observed CI marker:
+
+```text
+GAZELLE_REAL_FEL_MEL_RPU_CLASSIFICATION_PASS libdovi=3.3.2 authentic_upstream_metadata=true synthetic_bl_el_transport=true codec_selection=disabled actual_fel_decode=false android_kodi_compile=false no_device=true
+```
+
+**Meaning:** the isolated read-only classifier genuinely distinguishes these two test-vector RPUs. **Not** a genuine disc BL/EL stream, Kodi initial-stream lifetime proof, native decoder proof or residual playback. The experiment remains compile-time **OFF**, stock-only and non-deployable.
+
+## 24 October 2026 — independent Android ARMv7 two-translation-unit job initiated
+
+Added `.github/workflows/gazelle-fel-android-two-tu-build.yml` and `tools/gazelle-fel/compile-android-kodi-tus.py`. Job [40059389926](https://github.com/angelcode1/xbmc/actions/runs/40059389926) uses the original Android build's pinned NDK r28c/SDK and `tools/depends` build, configures `CMAKE_EXPORT_COMPILE_COMMANDS=ON`, then compiles **exactly** `xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp` and `xbmc/utils/BitstreamConverter.cpp` using the genuine Android-generated compiler commands. The runner rejects commands outside the checkout and compiler paths outside `ANDROID_NDK_HOME`. It does **not** sign, build or upload an APK, fetch signing secrets, modify Kodi on the device, or publish binary outputs.
+
+**At this checkpoint the build job was still in `Build Android depends` (NOT a compile pass).** Its eventual compiler status must be checked independently in the GitHub Actions run; there is no honest claim of successful Android compilation yet. Dependencies/downloads may fail before either translation unit is reached.
+
+Next after the exact target build: make the real initial-open packet handoff use the proven parser, with bounded original-message ownership and seek/timeout/flush safety; test full Kodi lifecycle before any device test. No on-device activation while independent recovery R0 is unverified.
+
 ## Source-lifetime restrictions
 
 - The video worker can receive `MSGQ_TIMEOUT` and call `ProcessDecoderOutput` even before any packet. Pending mode must guard this path before a null `m_pVideoCodec` dereference. The optional branch currently waits up to 500 ms and then uses stock; this is **not an owner-approved timing parameter** or a production latency claim.

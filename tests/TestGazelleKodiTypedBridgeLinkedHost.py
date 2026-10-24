@@ -362,14 +362,25 @@ int main() {
     assert(epochTwo->GetGazelleResearchEpoch()==2);
     assert(fence.HoldOrRefuse(epochTwo,20,12)==Decision::AwaitHeld);
     assert(!epochTwo && fence.PendingForAuditOnly()==1 && freed==1);
-    assert(fence.CommitReady(13,[](const auto&) noexcept {})==0);
+    assert(fence.CommitReady(13,[](const auto&,std::size_t) noexcept -> bool {
+      return true; // must not be invoked before applied barrier
+    })==0);
     // "BarrierApplied" must follow actual worker flush. This synthetic
     // harness models that action; it does NOT run VideoPlayerVideo::Flush.
     assert(fence.BarrierApplied(2,14)==Decision::Applied);
-    assert(fence.CommitReady(15,[&](const auto& m) noexcept {
-      assert(m && m->GetPacket()->iStreamId==81);
+    assert(fence.CommitReady(15,[](const auto&,std::size_t) noexcept -> bool {
+      return false; // simulated downstream refusal; zero originals lost
+    })==0);
+    assert(fence.PendingForAuditOnly()==1 && freed==1);
+    std::shared_ptr<CDVDMsgDemuxerPacket> acceptedOriginal;
+    assert(fence.CommitReady(16,[&](const auto& msgs,std::size_t count) noexcept -> bool {
+      assert(count==1 && msgs[0] && msgs[0]->GetPacket()->iStreamId==81);
+      acceptedOriginal=msgs[0]; // retain original shared owner, no data copy
+      return true;
     })==1);
-    assert(fence.PendingForAuditOnly()==0 && freed==2);
+    assert(fence.PendingForAuditOnly()==0 && freed==1);
+    acceptedOriginal.reset();
+    assert(freed==2);
     fence.Close(); fence.Close();
     queue.End();
   }
@@ -465,6 +476,7 @@ int main() {
             "overflow_caller_retains=true expired_hold_requires_barrier=true "
             "serialized_epoch_fence_with_real_queue=true "
             "concurrent_commit_precedes_seek_publication=true "
+            "rejected_barrier_handoff_retains_original=true "
             "external_platform_demux_shims=true "
             "no_real_worker=true no_device=true fel_switch_off=true");
 }

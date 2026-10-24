@@ -103,7 +103,9 @@ void CDVDMsgGeneralSynchronize::Wait(std::atomic<bool>&, unsigned) {}
 """
         )
         (root / "packet_message_real_methods.cpp").write_text(real_message_impl, encoding="utf8")
-        (root / "queue_and_messages.cpp").write_text(TEST.replace(
+        (root / "queue_and_messages.cpp").write_text((
+            '#include "cores/VideoPlayer/Interface/DemuxPacket.h"\n' + TEST
+        ).replace(
             "GAZELLE_KODI_UNMODIFIED_QUEUE_OBJECT_LINK_PASS",
             "GAZELLE_KODI_REAL_MESSAGE_HEADER_AND_QUEUE_LINK_PASS").replace(
             "actual_kodi_message_header=false", "actual_kodi_message_header=true"

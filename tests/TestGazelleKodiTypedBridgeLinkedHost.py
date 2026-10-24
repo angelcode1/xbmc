@@ -712,6 +712,44 @@ int main() {
     fence.Close(); queue.End();
   }
 
+  // Even an original priority-10 retry accepted BEFORE publication is
+  // rejected at the worker's modeled consumption boundary, rather than
+  // forwarded to an unsafe decoder. The unchanged Kodi queue really
+  // delivers it before the lower-priority GENERAL_FLUSH.
+  {
+    using Fence = GazelleFELPrecreate::SeekFence<CDVDMsgDemuxerPacket,
+                                                  CDVDMessageQueue>;
+    using Decision = GazelleFELPrecreate::FenceDecision;
+    unsigned freed=0;
+    CDVDMessageQueue queue("gazelle-linked-priority10-consume-fence");
+    queue.Init(); queue.SetMaxDataSize(10000);
+    Fence fence(queue,50);
+    auto first=Original(320,false,&freed);
+    assert(fence.EnqueueOriginal(first)==Decision::Submitted);
+    first.reset();
+    auto originallyDequeued=NextPacket(queue);
+    assert(fence.TryEnqueueDecoderRetry(originallyDequeued)==Decision::Submitted);
+    assert(!originallyDequeued);
+    assert(fence.PublishBarrier([](std::uint64_t) {
+      return std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH);
+    },10)==Decision::Submitted);
+    int priority=0;
+    std::shared_ptr<CDVDMsg> current;
+    assert(queue.Get(current,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(priority==10 && current->IsType(CDVDMsg::DEMUXER_PACKET));
+    auto retry=std::static_pointer_cast<CDVDMsgDemuxerPacket>(std::move(current));
+    assert(retry->GetGazelleResearchEpoch()==1);
+    assert(fence.PrepareOriginalLease(retry,20)==Decision::StaleDropped);
+    assert(!retry && freed==1 && !fence.PreparedForAuditOnly());
+    priority=0;
+    assert(queue.Get(current,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(priority==1 && current->IsType(CDVDMsg::GENERAL_FLUSH));
+    current.reset();
+    assert(fence.BarrierApplied(2,11)==Decision::Applied);
+    assert(freed==1 && !queue.GetDataSize());
+    fence.Close(); queue.End();
+  }
+
   std::puts("GAZELLE_KODI_TYPED_BRIDGE_LINK_HOST_PASS "
             "original_kodi_queue_and_messages=true "
             "borrow_epoch_from_original=true priority_flush_overtake=true "
@@ -733,6 +771,7 @@ int main() {
             "prepared_originals_revoked_on_seek=true "
             "inflight_lease_blocks_barrier_until_finish=true "
             "blocking_external_work_outside_fence_lock=true "
+            "prequeued_priority10_retry_rejected_at_consume_fence=true "
             "external_platform_demux_shims=true "
             "no_real_worker=true no_device=true fel_switch_off=true");
 }

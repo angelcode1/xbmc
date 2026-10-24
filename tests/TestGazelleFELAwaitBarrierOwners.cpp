@@ -153,13 +153,20 @@ int main()
       hold.Close();
       hold.Close();
       assert(freed == 1);
+      auto afterClose = Make(13, freed);
+      assert(hold.TryHold(afterClose, 3, 3, 2, 1, 1) ==
+             Result::CallerMustRetain);
+      assert(afterClose && !hold.Size());
+      afterClose.reset();
+      assert(freed == 2);
     }
-    assert(freed == 1);
+    assert(freed == 2);
   }
   std::cout << "GAZELLE_AWAIT_BARRIER_OWNERS_HOST_PASS "
                "capacity=2 declared_bytes_limit=33554432 "
                "preflush_no_stock=true caller_retains_on_backpressure=true "
                "deadline_retains_originals=true applied_flush_releases_once=true "
                "superseded_seek_drops_stale_once=true bad_epochs_refused=true "
+               "close_cannot_reopen=true "
                "no_live_worker=true no_device=true fel_disabled=true\n";
 }

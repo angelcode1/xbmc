@@ -8,6 +8,11 @@ on:
       - .github/workflows/gazelle-fel-android-two-tu-build.yml
       - tools/gazelle-fel/compile-android-kodi-tus.py
       - tools/gazelle-fel/verify-deferred-open-source.py
+      - tests/TestGazelleKodiProducerStampSource.py
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiProducerEpoch.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELProducerEpoch.h
+      - xbmc/cores/VideoPlayer/DVDMessage.h
       - tests/TestGazelleDeferredStockPolicy.cpp
       - xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
       - xbmc/cores/VideoPlayer/VideoPlayerVideo.h
@@ -59,6 +64,7 @@ jobs:
           test "$GITHUB_REF_NAME" = research/gazelle-fel-deferred-open-offline-20261024
           python3 -S tools/gazelle-fel/verify-deferred-open-source.py
           python3 -S tools/gazelle-fel/verify-deferred-open-source.py --selftest
+          python3 -S tests/TestGazelleKodiProducerStampSource.py
           grep -Fxq 'VERSION=3.3.2' tools/depends/target/libdovi/LIBDOVI-VERSION
           echo GAZELLE_ANDROID_ARMV7_SOURCE_PIN_PASS
       - name: Set up Java 17

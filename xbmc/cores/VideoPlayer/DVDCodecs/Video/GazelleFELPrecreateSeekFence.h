@@ -94,6 +94,40 @@ public:
     return FenceDecision::Applied;
   }
 
+  // OFFLINE retry ingress: Kodi's VC_FLUSHED and VC_REOPEN normally use
+  // SendMessage(original, 10), which can starve a priority-1 seek flush.
+  // Reject old original owners AFTER new seek publication and retain new
+  // owners for caller backpressure UNTIL their actual flush is applied.
+  // Only a same-epoch, already-applied retry can enter the priority-10
+  // queue. This only protects retry calls that use THIS SAME ingress.
+  // Existing Kodi calls bypass it, and previously queued priority-10
+  // packets can still starve a barrier; not a live fairness solution.
+  FenceDecision TryEnqueueDecoderRetry(Owner& original)
+  {
+    std::lock_guard<std::mutex> guard(m_mutex);
+    if (m_closed || !original)
+      return FenceDecision::Refused;
+    const auto admission = ClassifyEpoch(
+        original->GetGazelleResearchEpoch(), m_published, m_applied);
+    if (admission == Admission::StaleReject)
+    {
+      original.reset();
+      return FenceDecision::StaleDropped;
+    }
+    if (admission == Admission::UntaggedStock)
+      return FenceDecision::UntaggedStockOnly;
+    if (admission == Admission::AwaitBarrier)
+      return FenceDecision::Backpressure; // caller retains original
+    if (admission != Admission::MetadataOnly)
+      return FenceDecision::Refused;
+    // Kodi queue Put only takes a shared original owner on successful
+    // submission; failure leaves it with the caller. Never PutBack.
+    if (static_cast<int>(m_queue.Put(original, 10)) != 1)
+      return FenceDecision::Backpressure;
+    original.reset();
+    return FenceDecision::Submitted;
+  }
+
   // The returned enum is NOT permission for caller to feed a decoder:
   // only CommitOriginal() can commit under the shared producer fence.
   FenceDecision HoldOrRefuse(Owner& original, std::size_t declaredBytes,

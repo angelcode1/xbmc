@@ -489,6 +489,91 @@ int main() {
     zero.Close(); maxed.Close(); queue.End();
   }
 
+  // Retry admitted AFTER seek publication: old original epoch is revoked,
+  // not inserted at priority 10 in front of the priority-1 seek flush.
+  {
+    using Fence = GazelleFELPrecreate::SeekFence<CDVDMsgDemuxerPacket,
+                                                  CDVDMessageQueue>;
+    using Decision = GazelleFELPrecreate::FenceDecision;
+    unsigned freed=0;
+    CDVDMessageQueue queue("gazelle-linked-retry-gate");
+    queue.Init(); queue.SetMaxDataSize(10000);
+    Fence fence(queue,50);
+    auto old=Original(110,false,&freed);
+    auto* oldId=old.get();
+    assert(fence.EnqueueOriginal(old)==Decision::Submitted);
+    old.reset();
+    auto retry=NextPacket(queue);
+    assert(retry.get()==oldId && queue.GetDataSize()==0);
+    assert(fence.PublishBarrier([](std::uint64_t) {
+      return std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH);
+    },1)==Decision::Submitted);
+    assert(fence.TryEnqueueDecoderRetry(retry)==Decision::StaleDropped);
+    assert(!retry && freed==1);
+    std::shared_ptr<CDVDMsg> barrier; int priority=0;
+    assert(queue.Get(barrier,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(priority==1 && barrier->IsType(CDVDMsg::GENERAL_FLUSH));
+    barrier.reset();
+
+    // A newly tagged epoch-2 original may NOT retry ahead of this unapplied
+    // barrier. No owner transfer; the caller must exert actual backpressure.
+    auto newEpoch=Original(111,false,&freed);
+    auto* newId=newEpoch.get();
+    assert(newEpoch->TrySetGazelleResearchEpoch(2));
+    assert(fence.TryEnqueueDecoderRetry(newEpoch)==Decision::Backpressure);
+    assert(newEpoch.get()==newId && freed==1 && !queue.GetDataSize());
+    assert(fence.BarrierApplied(2,2)==Decision::Applied);
+    assert(fence.TryEnqueueDecoderRetry(newEpoch)==Decision::Submitted);
+    assert(!newEpoch);
+    std::shared_ptr<CDVDMsg> ready; priority=0;
+    assert(queue.Get(ready,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(priority==10 && ready.get()==newId);
+    assert(std::static_pointer_cast<CDVDMsgDemuxerPacket>(ready)
+               ->GetGazelleResearchEpoch()==2);
+    ready.reset();
+    assert(freed==2 && !queue.GetDataSize());
+    fence.Close(); queue.End();
+  }
+
+  // PRIORITY 10 packets that were already enqueued BEFORE a new seek can
+  // still overtake its later priority-1 flush. Ingress validation alone
+  // cannot solve this: worker must revalidate the producer epoch at actual
+  // consumption, before any blocking decoder input. Remains live NO-GO.
+  {
+    using Fence = GazelleFELPrecreate::SeekFence<CDVDMsgDemuxerPacket,
+                                                  CDVDMessageQueue>;
+    using Decision = GazelleFELPrecreate::FenceDecision;
+    unsigned freed=0;
+    CDVDMessageQueue queue("gazelle-linked-existing-retry");
+    queue.Init(); queue.SetMaxDataSize(10000);
+    Fence fence(queue,50);
+    auto original=Original(112,false,&freed);
+    assert(fence.EnqueueOriginal(original)==Decision::Submitted);
+    original.reset();
+    auto retried=NextPacket(queue);
+    assert(fence.TryEnqueueDecoderRetry(retried)==Decision::Submitted);
+    assert(!retried);
+    assert(fence.PublishBarrier([](std::uint64_t) {
+      return std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH);
+    },3)==Decision::Submitted);
+    std::shared_ptr<CDVDMsg> popped;int priority=0;
+    assert(queue.Get(popped,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(priority==10 && popped->IsType(CDVDMsg::DEMUXER_PACKET));
+    auto oldAgain=std::static_pointer_cast<CDVDMsgDemuxerPacket>(popped);
+    assert(GazelleFELPrecreate::ClassifyEpoch(
+        oldAgain->GetGazelleResearchEpoch(),
+        fence.PublishedForAuditOnly(),fence.AppliedForAuditOnly())==
+        GazelleFELPrecreate::Admission::StaleReject);
+    oldAgain.reset(); popped.reset();
+    assert(freed==1);
+    priority=0;
+    assert(queue.Get(popped,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(priority==1 && popped->IsType(CDVDMsg::GENERAL_FLUSH));
+    popped.reset();
+    assert(fence.BarrierApplied(2,4)==Decision::Applied);
+    fence.Close(); queue.End();
+  }
+
   std::puts("GAZELLE_KODI_TYPED_BRIDGE_LINK_HOST_PASS "
             "original_kodi_queue_and_messages=true "
             "borrow_epoch_from_original=true priority_flush_overtake=true "
@@ -504,6 +589,8 @@ int main() {
             "concurrent_commit_precedes_seek_publication=true "
             "rejected_barrier_handoff_retains_original=true "
             "zero_and_wrapped_epoch_refused=true "
+            "postseek_retry_admission_blocks_priority10=true "
+            "prequeued_retry_still_requires_worker_fence=true "
             "external_platform_demux_shims=true "
             "no_real_worker=true no_device=true fel_switch_off=true");
 }

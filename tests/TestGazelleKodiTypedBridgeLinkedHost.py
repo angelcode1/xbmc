@@ -27,6 +27,12 @@ BRIDGE_TEST = r"""
 #include "GazelleFELProducerEpoch.h"
 #include "GazelleFELPrecreateAdmission.h"
 #include "GazelleFELAwaitBarrierOwners.h"
+#include "GazelleFELPrecreateSeekFence.h"
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 
 #include <cassert>
 #include <cstdio>
@@ -321,6 +327,131 @@ int main() {
     queue.End();
   }
 
+  // Source-linked unchanged Kodi queue + actual packet message types:
+  // one producer/worker fence serializes packet stamping, seek publication,
+  // worker applied-barrier reports, and immediate synthetic commit.
+  {
+    using Fence = GazelleFELPrecreate::SeekFence<CDVDMsgDemuxerPacket,
+                                                  CDVDMessageQueue>;
+    using Decision = GazelleFELPrecreate::FenceDecision;
+    unsigned freed=0;
+    CDVDMessageQueue queue("gazelle-linked-serialized-epoch-fence");
+    queue.Init(); queue.SetMaxDataSize(10000);
+    Fence fence(queue, 50);
+    auto old = Original(80,false,&freed);
+    assert(fence.EnqueueOriginal(old)==Decision::Submitted);
+    old.reset();
+    assert(fence.PublishBarrier([](std::uint64_t) {
+      return std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH);
+    },10)==Decision::Submitted);
+    assert(fence.PublishedForAuditOnly()==2 &&
+           fence.AppliedForAuditOnly()==1);
+    auto fresh = Original(81,false,&freed);
+    assert(fence.EnqueueOriginal(fresh)==Decision::Submitted);
+    fresh.reset();
+    std::shared_ptr<CDVDMsg> flush;
+    int priority=0;
+    assert(queue.Get(flush,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(flush->IsType(CDVDMsg::GENERAL_FLUSH) && priority==1);
+    flush.reset();
+    auto stale=NextPacket(queue);
+    assert(stale->GetGazelleResearchEpoch()==1);
+    assert(fence.HoldOrRefuse(stale,20,11)==Decision::StaleDropped);
+    assert(!stale && freed==1);
+    auto epochTwo=NextPacket(queue);
+    assert(epochTwo->GetGazelleResearchEpoch()==2);
+    assert(fence.HoldOrRefuse(epochTwo,20,12)==Decision::AwaitHeld);
+    assert(!epochTwo && fence.PendingForAuditOnly()==1 && freed==1);
+    assert(fence.CommitReady(13,[](const auto&) noexcept {})==0);
+    // "BarrierApplied" must follow actual worker flush. This synthetic
+    // harness models that action; it does NOT run VideoPlayerVideo::Flush.
+    assert(fence.BarrierApplied(2,14)==Decision::Applied);
+    assert(fence.CommitReady(15,[&](const auto& m) noexcept {
+      assert(m && m->GetPacket()->iStreamId==81);
+    })==1);
+    assert(fence.PendingForAuditOnly()==0 && freed==2);
+    fence.Close(); fence.Close();
+    queue.End();
+  }
+  // Failed synthetic stock handoff retains caller owner; successful callback
+  // commits once under the same lock as publication. Demonstrate linearizable
+  // ordering under a deterministic producer/worker concurrency interleave.
+  {
+    using Fence = GazelleFELPrecreate::SeekFence<CDVDMsgDemuxerPacket,
+                                                  CDVDMessageQueue>;
+    using Decision = GazelleFELPrecreate::FenceDecision;
+    unsigned freed=0;
+    CDVDMessageQueue queue("gazelle-linked-fence-concurrent");
+    queue.Init(); queue.SetMaxDataSize(10000);
+    Fence fence(queue, 50);
+    auto caller=Original(90,false,&freed);
+    assert(fence.EnqueueOriginal(caller)==Decision::Submitted);
+    caller.reset();
+    auto original=NextPacket(queue);
+    assert(fence.CommitOriginal(original,[](const auto&) noexcept -> bool {
+      return false;
+    })==Decision::Backpressure);
+    assert(original && freed==0);
+
+    std::mutex signalMutex;
+    std::condition_variable signal;
+    bool entered=false, allowCommit=false, producerStarted=false;
+    std::atomic<bool> publishReturned{false};
+    std::atomic<bool> commitSucceeded{false};
+    std::thread worker([&] {
+      const auto result=fence.CommitOriginal(original,[&](const auto& msg) noexcept -> bool {
+        assert(msg && msg->GetPacket()->iStreamId==90);
+        {
+          std::lock_guard<std::mutex> guard(signalMutex);
+          entered=true;
+        }
+        signal.notify_all();
+        {
+          std::unique_lock<std::mutex> lock(signalMutex);
+          signal.wait(lock,[&]{return allowCommit;});
+        }
+        return true;
+      });
+      commitSucceeded.store(result==Decision::Committed);
+    });
+    {
+      std::unique_lock<std::mutex> guard(signalMutex);
+      assert(signal.wait_for(guard,std::chrono::seconds(5),[&]{return entered;}));
+    }
+    std::thread producer([&] {
+      {
+        std::lock_guard<std::mutex> guard(signalMutex);
+        producerStarted=true;
+      }
+      signal.notify_all();
+      const auto outcome=fence.PublishBarrier([](std::uint64_t) {
+        return std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH);
+      },100);
+      assert(outcome==Decision::Submitted);
+      publishReturned.store(true);
+    });
+    {
+      std::unique_lock<std::mutex> guard(signalMutex);
+      assert(signal.wait_for(guard,std::chrono::seconds(5),[&]{return producerStarted;}));
+      // Producer publication cannot cross a callback holding the fence.
+      assert(!publishReturned.load());
+      allowCommit=true;
+    }
+    signal.notify_all();
+    worker.join(); producer.join();
+    assert(commitSucceeded.load() && publishReturned.load() &&
+           fence.PublishedForAuditOnly()==2 && freed==1 && !original);
+    // Control still pending in unchanged Kodi queue, not worker-applied.
+    assert(fence.AppliedForAuditOnly()==1);
+    std::shared_ptr<CDVDMsg> flush;
+    int priority=0;
+    assert(queue.Get(flush,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(flush->IsType(CDVDMsg::GENERAL_FLUSH));
+    flush.reset();
+    assert(fence.BarrierApplied(2,101)==Decision::Applied);
+    fence.Close(); queue.End();
+  }
+
   std::puts("GAZELLE_KODI_TYPED_BRIDGE_LINK_HOST_PASS "
             "original_kodi_queue_and_messages=true "
             "borrow_epoch_from_original=true priority_flush_overtake=true "
@@ -332,6 +463,8 @@ int main() {
             "dual_epoch_admission_rejects_stale_and_premature_new=true "
             "bounded_await_barrier_originals=2 preflush_no_stock=true "
             "overflow_caller_retains=true expired_hold_requires_barrier=true "
+            "serialized_epoch_fence_with_real_queue=true "
+            "concurrent_commit_precedes_seek_publication=true "
             "external_platform_demux_shims=true "
             "no_real_worker=true no_device=true fel_switch_off=true");
 }

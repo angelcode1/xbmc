@@ -57,9 +57,13 @@ int main()
     assert(f.RequestFlush(10));
     assert(f.BeginRelease(*old).decision == Decision::Stale);
     auto flushing = f.BeginNativeFlush(); assert(flushing);
-    assert(f.RetireStaleWithoutJNI(*old) == Decision::Stale); // retirement can happen during native flush
+    // Publication and native-flush entry are NOT proof of invalidation.
+    assert(f.RetireStaleWithoutJNI(*old) == Decision::Refused);
+    assert(f.Outstanding() == 1);
     assert(!f.FinishNativeFlush(Fence::FlushPermit{99,99,99,99},true,true));
+    assert(f.RetireStaleWithoutJNI(*old) == Decision::Refused);
     assert(f.FinishNativeFlush(*flushing,true,true));
+    assert(f.RetireStaleWithoutJNI(*old) == Decision::Stale);
     assert(f.Outstanding() == 0);
     assert(f.ReportRendererRetired(10,true,true));
     assert(f.Acknowledge(10));
@@ -88,6 +92,35 @@ int main()
     assert(f.RetireStaleWithoutJNI(*old) == Decision::Invalid);
     assert(f.ReportRendererRetired(5,true,true) && f.Acknowledge(5));
   }
+  // A failed JNI flush must not generate a synthetic stale-retirement
+  // certificate, even if the caller proceeds to model renderer cleanup.
+  {
+    Fence f; assert(f.OpenFirst());
+    auto held = f.Acquire(13); assert(held);
+    assert(f.RequestFlush(19));
+    assert(f.RetireStaleWithoutJNI(*held) == Decision::Refused);
+    auto flushing = f.BeginNativeFlush(); assert(flushing);
+    assert(f.RetireStaleWithoutJNI(*held) == Decision::Refused);
+    assert(f.FinishNativeFlush(*flushing, true, false));
+    assert(f.RetireStaleWithoutJNI(*held) == Decision::Refused);
+    assert(f.Outstanding() == 1 && !f.Ready(19));
+  }
+  // A newer seek never invalidates an index merely by publication;
+  // a renderer return cannot erase the owner before the flush returns.
+  {
+    Fence f; assert(f.OpenFirst());
+    auto held = f.Acquire(14); assert(held);
+    assert(f.RequestFlush(22));
+    assert(f.RetireStaleWithoutJNI(*held) == Decision::Refused);
+    assert(f.Outstanding() == 1);
+    auto flushing = f.BeginNativeFlush(); assert(flushing);
+    assert(!f.ReportRendererRetired(22, true, true));
+    assert(f.FinishNativeFlush(*flushing, true, true));
+    assert(!f.ReportRendererRetired(22, true, true));
+    assert(f.RetireStaleWithoutJNI(*held) == Decision::Stale);
+    assert(f.ReportRendererRetired(22, true, true));
+    assert(f.Ready(22) && f.Acknowledge(22));
+  }
   // Stop + recreation has a new decoder ID, even if the OEM recycles 7;
   // held frames of old instance cannot be released against new codec.
   {
@@ -95,6 +128,7 @@ int main()
     auto old = f.Acquire(7); assert(old);
     f.Close(); assert(!f.ReopenAfterStop());
     assert(f.BeginRelease(*old).decision == Decision::Stale);
+    assert(f.RetireStaleWithoutJNI(*old) == Decision::Refused);
     assert(f.ReportStop(true,true)); assert(f.ReopenAfterStop());
     auto newer = f.Acquire(7); assert(newer);
     assert(newer->decoder != old->decoder);
@@ -220,5 +254,8 @@ int main()
                "decoder_recreation_isolated=true release_error_latched=true "
                "flush_error_latched=true strict_sequential_seeks=true "
                "wrap_refused=true output_capacity_bounded=true "
+               "stale_retire_requires_native_flush_return=true "
+               "stop_return_required_before_stale_retire=true "
+               "flush_exception_does_not_invalidate=true "
                "host_model_only=true no_device=true fel_off=true\n";
 }

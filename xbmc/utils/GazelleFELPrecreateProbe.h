@@ -65,39 +65,31 @@ inline PrecreateRpuType InspectRpu(const uint8_t* nal, std::size_t size) noexcep
 #endif
 }
 
-// Immutable length-prefixed AU (existing in-band BL+EL+RPU layout).
-// This does not decode HEVC, validate RPU authenticity beyond libdovi,
-// own a packet, or prove the first AU was obtained before codec allocation.
-// Requires one VCL NAL, one EL type-63 NAL and exactly one RPU type-62 NAL.
-// Unknown results must only fall through to the stock decoder.
+// Immutable in-band HEVC AU. Transport can carry 3/4-byte Annex B start
+// codes (notably MPEG-TS/Blu-ray) OR hvcC length-prefixed NALs. The two
+// framing modes are disjoint: a legal length-prefixed NAL cannot have the
+// first NAL size 1 as implied by a leading Annex B prefix. Never heuristically
+// accept a non-Annex-B packet without trusted hvcC length-width metadata.
+//
+// This does not decode HEVC, authorize FEL playback, own the packet, or prove
+// the AU reached Kodi before its initial stock decoder open. Fail closed on
+// malformed framing, duplicated RPU, protection, or missing BL/EL.
 inline PrecreateResult InspectFirstAU(const uint8_t* data, std::size_t bytes,
                                      const uint8_t* hvcc, std::size_t hvccBytes,
                                      bool protectedContent) noexcept
 {
   PrecreateResult result{};
-  if (protectedContent || !data || !bytes || bytes > kMaxPrecreateAU ||
-      !hvcc || hvccBytes < 23u || hvcc[0] != 1u)
+  if (protectedContent || !data || !bytes || bytes > kMaxPrecreateAU)
     return result;
-  const unsigned width = static_cast<unsigned>(hvcc[21] & 3u) + 1u;
-  if (width == 3u) // reserved length-prefix width
-    return result;
-  std::size_t pos = 0;
+
   std::size_t count = 0;
   const uint8_t* soleRpu = nullptr;
   std::size_t soleRpuBytes = 0;
   unsigned rpuCount = 0;
-  while (pos < bytes)
-  {
-    if (++count > kMaxPrecreateNals || bytes - pos < width)
-      return {};
-    uint32_t length = 0;
-    for (unsigned i = 0; i < width; ++i)
-      length = (length << 8u) | data[pos++];
-    if (length < 2u || static_cast<std::size_t>(length) > bytes - pos)
-      return {};
-    const uint8_t* const nal = data + pos;
-    if ((nal[0] & 0x80u) || (nal[1] & 7u) == 0u)
-      return {};
+  const auto acceptNal = [&](const uint8_t* nal, std::size_t length) -> bool {
+    if (++count > kMaxPrecreateNals || length < 2u ||
+        (nal[0] & 0x80u) || (nal[1] & 7u) == 0u)
+      return false;
     const unsigned type = static_cast<unsigned>((nal[0] >> 1u) & 63u);
     if (type <= 31u)
       result.bl = true;
@@ -106,14 +98,71 @@ inline PrecreateResult InspectFirstAU(const uint8_t* data, std::size_t bytes,
     if (type == 62u)
     {
       if (++rpuCount != 1u || length > kMaxPrecreateRpu)
-        return {};
+        return false;
       soleRpu = nal;
       soleRpuBytes = length;
       result.rpu = true;
     }
-    pos += length;
+    return true;
+  };
+
+  const auto startCodeWidth = [&](std::size_t at) -> unsigned {
+    if (at >= bytes || bytes - at < 3u || data[at] != 0u ||
+        data[at + 1u] != 0u)
+      return 0u;
+    if (data[at + 2u] == 1u)
+      return 3u;
+    if (bytes - at >= 4u && data[at + 2u] == 0u &&
+        data[at + 3u] == 1u)
+      return 4u;
+    return 0u;
+  };
+
+  const bool annexB = startCodeWidth(0u) != 0u;
+  std::size_t pos = 0;
+  if (annexB)
+  {
+    // Read-only bounded scan; no copy, no NAL rewrite and no unchecked
+    // arithmetic. Strip transport trailing_zero_8bits only, not RPU bytes.
+    while (pos < bytes)
+    {
+      const unsigned prefix = startCodeWidth(pos);
+      if (!prefix)
+        return {};
+      pos += prefix;
+      std::size_t end = pos;
+      while (end < bytes && !startCodeWidth(end))
+        ++end;
+      std::size_t nalEnd = end;
+      while (nalEnd > pos && data[nalEnd - 1u] == 0u)
+        --nalEnd;
+      if (!acceptNal(data + pos, nalEnd - pos))
+        return {};
+      pos = end;
+    }
   }
-  result.framingValid = pos == bytes && count != 0u;
+  else
+  {
+    if (!hvcc || hvccBytes < 23u || hvcc[0] != 1u)
+      return {};
+    const unsigned width = static_cast<unsigned>(hvcc[21] & 3u) + 1u;
+    if (width == 3u) // reserved length-prefix width
+      return {};
+    while (pos < bytes)
+    {
+      if (bytes - pos < width)
+        return {};
+      uint32_t length = 0;
+      for (unsigned i = 0; i < width; ++i)
+        length = (length << 8u) | data[pos++];
+      if (length < 2u || static_cast<std::size_t>(length) > bytes - pos ||
+          !acceptNal(data + pos, length))
+        return {};
+      pos += length;
+    }
+  }
+
+  result.framingValid = count != 0u && pos == bytes;
   if (!result.framingValid || !result.bl || !result.el || rpuCount != 1u)
     return result;
   result.type = InspectRpu(soleRpu, soleRpuBytes);

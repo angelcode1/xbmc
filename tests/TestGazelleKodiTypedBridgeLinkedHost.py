@@ -25,6 +25,7 @@ BRIDGE_TEST = r"""
 #include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include "GazelleFELPrecreateKodiBridge.h"
 #include "GazelleFELProducerEpoch.h"
+#include "GazelleFELPrecreateAdmission.h"
 
 #include <cassert>
 #include <cstdio>
@@ -197,6 +198,17 @@ int main() {
     assert(priority==10 && next.get()==oldId);
     auto oldAgain=std::static_pointer_cast<CDVDMsgDemuxerPacket>(next);
     assert(oldAgain->GetGazelleResearchEpoch()==1);
+    // A producer-published seek watermark must win even if the worker has
+    // not processed the priority-1 flush. THIS IS NOT WIRED TO LIVE KODI.
+    assert(GazelleFELPrecreate::ClassifyEpoch(
+        oldAgain->GetGazelleResearchEpoch(),
+        ingress.ProducerEpochForAuditOnly(), 1) ==
+        GazelleFELPrecreate::Admission::StaleReject);
+    assert(!GazelleFELPrecreate::MayDirectStockReplay(
+        oldAgain->GetGazelleResearchEpoch(),
+        ingress.ProducerEpochForAuditOnly(), 1));
+    assert(GazelleFELPrecreate::ClassifyEpoch(2,2,1) ==
+           GazelleFELPrecreate::Admission::AwaitBarrier);
     // Producer knows epoch 2 already, but worker's PairOwners would still
     // be at epoch 1 until the priority-1 control was processed. DO NOT pair.
     next.reset();
@@ -207,6 +219,9 @@ int main() {
     assert(queue.Get(next,std::chrono::milliseconds(0),priority)==MSGQ_OK);
     assert(priority==1 && next->IsType(CDVDMsg::GENERAL_FLUSH));
     next.reset();
+    assert(GazelleFELPrecreate::ClassifyEpoch(2,2,2) ==
+           GazelleFELPrecreate::Admission::MetadataOnly);
+    assert(GazelleFELPrecreate::MayDirectStockReplay(2,2,2));
     assert(freed==1);
     assert(queue.GetDataSize()==0); // priority-10 retry is not ordinary bytes
     queue.End();
@@ -246,6 +261,7 @@ int main() {
             "protection_drop_veto=true direct_stock_once=true "
             "queue_accounting_preserved=true retry_priority_10_overtakes_flush_1=true "
             "retry_before_barrier_requires_external_epoch_watermark=true "
+            "dual_epoch_admission_rejects_stale_and_premature_new=true "
             "external_platform_demux_shims=true "
             "no_real_worker=true no_device=true fel_switch_off=true");
 }

@@ -30,6 +30,10 @@ on:
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELAwaitBarrierOwners.h
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateSeekFence.h
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateDispatchLease.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELNativeQuiescenceGate.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecAndroidMediaCodec.cpp
+      - tests/TestGazelleFELNativeQuiescenceGate.cpp
+      - tests/TestGazelleMediaCodecQuiescenceSource.py
       - tests/TestGazelleFELPrecreateDispatchLease.cpp
       - tests/TestGazelleFELAwaitBarrierOwners.cpp
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h
@@ -143,6 +147,23 @@ jobs:
             -fsanitize=undefined -fno-sanitize-recover=all \
             tests/TestGazelleFELPrecreateDispatchLease.cpp -o /tmp/gazelle-dispatch-lease-ubsan
           /tmp/gazelle-dispatch-lease-ubsan
+      - name: Audit real Kodi JNI flush and output lifetime, refuse fabricated native proof
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleMediaCodecQuiescenceSource.py
+      - name: Test synthetic native quiescence witness requirements
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELNativeQuiescenceGate.cpp -o /tmp/gazelle-native-evidence
+          /tmp/gazelle-native-evidence
+      - name: Repeat native quiescence witness under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELNativeQuiescenceGate.cpp -o /tmp/gazelle-native-evidence-ubsan
+          /tmp/gazelle-native-evidence-ubsan
       - name: Verify Kodi-like producer-time original message stamp (C++17)
         run: |
           set -euo pipefail

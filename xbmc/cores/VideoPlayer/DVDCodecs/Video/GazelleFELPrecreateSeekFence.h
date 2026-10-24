@@ -139,21 +139,26 @@ public:
     return FenceDecision::Committed;
   }
 
-  // Callback is a model of an immediate, guaranteed handoff ONLY.
-  // To avoid loss on downstream failure, this refuses to transfer if any
-  // callback may reject; it is deliberately NOT a Kodi AddData API.
+  // All-or-nothing acknowledgment under the SAME seek publication lock.
+  // A rejecting downstream callback leaves BOTH original messages held,
+  // without PutBack, duplicated queue bytes, or a fabricated raw packet.
+  // Successful callback MUST retain original shared pointers or complete
+  // synchronous handoff. This is never called by the real Kodi decoder.
   template <class Callback>
   std::size_t CommitReady(std::uint64_t nowTicks, Callback&& callback) noexcept
   {
-    static_assert(std::is_nothrow_invocable_r_v<void, Callback, const Owner&>,
-                  "Ready callback must be void noexcept(const Owner&)");
+    static_assert(std::is_nothrow_invocable_r_v<
+                      bool, Callback,
+                      const std::array<Owner, kMaxAwaitBarrierOwners>&,
+                      std::size_t>,
+                  "Ready callback must acknowledge bool noexcept");
     std::lock_guard<std::mutex> guard(m_mutex);
     if (m_closed)
       return 0;
-    auto originals = m_holder.TakeAfterBarrier(m_published, m_applied, nowTicks);
-    for (std::size_t i = 0; i < originals.count; ++i)
-      std::forward<Callback>(callback)(originals.original[i]);
-    return originals.count;
+    const auto count = m_holder.Size();
+    const bool accepted = m_holder.AcceptAfterBarrier(
+        m_published, m_applied, nowTicks, std::forward<Callback>(callback));
+    return accepted ? count : 0;
   }
 
   // Deliberately an audit snapshot only: it is NOT an admission permit.

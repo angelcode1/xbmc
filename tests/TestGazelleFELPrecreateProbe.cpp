@@ -69,7 +69,7 @@ int main() {
       case 3:v[5]=0;break;                          // temporal id zero
       case 4:v.erase(v.begin()+7,v.begin()+14);break; // missing RPU
       case 5:v.resize(14);break;                    // no EL
-      case 6:v.insert(v.end(),v.begin()+7,v.begin()+14);break;// duplicate RPU
+      case 6:{auto rpu=std::vector<uint8_t>(v.begin()+7,v.begin()+14);v.insert(v.end(),rpu.begin(),rpu.end());break;}// duplicate RPU
       case 7:hv[21]=2;break;                        // reserved width
       case 8:protectedInput=true;break;
       case 9:hv[0]=0;break;

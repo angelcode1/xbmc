@@ -737,7 +737,8 @@ int main() {
     std::shared_ptr<CDVDMsg> current;
     assert(queue.Get(current,std::chrono::milliseconds(0),priority)==MSGQ_OK);
     assert(priority==10 && current->IsType(CDVDMsg::DEMUXER_PACKET));
-    auto retry=std::static_pointer_cast<CDVDMsgDemuxerPacket>(std::move(current));
+    auto retry=std::static_pointer_cast<CDVDMsgDemuxerPacket>(current);
+    current.reset(); // C++17 static_pointer_cast cannot consume base owner
     assert(retry->GetGazelleResearchEpoch()==1);
     assert(fence.PrepareOriginalLease(retry,20)==Decision::StaleDropped);
     assert(!retry && freed==1 && !fence.PreparedForAuditOnly());

@@ -90,6 +90,17 @@ jobs:
         run: |
           set -eu
           test -f /usr/include/libdovi/rpu_parser.h
+          echo '=== REAL LIBDOVI 3.3.2 HEADER DECLARATIONS ==='
+          sed -n '1,220p' /usr/include/libdovi/rpu_parser.h
+          echo '=== PACKAGE CONTENTS ==='
+          dpkg -L libdovi-dev | grep -E 'libdovi|\.h$|\.pc          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELRealLibdovi.cpp -ldovi -o /tmp/gazelle-real-libdovi
+          ldd /tmp/gazelle-real-libdovi | grep -F libdovi
+          /tmp/gazelle-real-libdovi
+          echo 'GAZELLE_REAL_LIBDOVI_HOST_ABI_GATE_PASS full_kodi_build=false real_FEL_fixture=false no_device=true'
+
+          echo '=== LIBRARY EXPORTED FUNCTIONS ==='
+          nm -D /usr/lib/x86_64-linux-gnu/libdovi.so | grep -E 'dovi_parse_unspec62_nalu|dovi_rpu_get_header|dovi_rpu_free' || true
           c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
             tests/TestGazelleFELRealLibdovi.cpp -ldovi -o /tmp/gazelle-real-libdovi
           ldd /tmp/gazelle-real-libdovi | grep -F libdovi

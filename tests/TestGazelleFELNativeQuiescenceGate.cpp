@@ -19,6 +19,8 @@ int main()
     assert(!g.BeginFlushProof(2)); // input lease still active
     assert(!g.InputReturned(2));
     assert(g.InputReturned(1));
+    // Do not overwrite an outstanding native proof debt with another input.
+    assert(!g.InputStarted(2));
     assert(g.NeedsNativeProof() && !g.Ready(2) && !g.Consume(2));
     assert(g.BeginFlushProof(2));
     assert(!g.Ready(2));
@@ -106,6 +108,6 @@ int main()
                "input_return_insufficient=true jni_flush_separate=true "
                "output_pool_and_renderer_required=true "
                "output_reference_counted=true jni_error_latched=true "
-               "epoch_wrap_refused=true no_real_jni=true "
+               "epoch_wrap_refused=true unresolved_input_debt_cannot_reset=true no_real_jni=true "
                "no_decoder_quiescence_proven=true fel_disabled=true\n";
 }

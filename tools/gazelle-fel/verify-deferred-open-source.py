@@ -42,17 +42,33 @@ def check(cpp: str, h: str, policy: str) -> None:
         "packet_guard_before_codec_call":
             "if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())" in cpp
             and "DemuxPacket* pPacket =" in cpp,
-        "flush_guard":
-            "if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())" in cpp
-            and "CDVDMsg::GENERAL_FLUSH" in cpp,
-        "reset_guard":
-            "CDVDMsg::GENERAL_RESET" in cpp,
+        "flush_guard": False,
+        "reset_guard": False,
         "stock_only_no_alias":
             "OMX.gazelle.research" not in cpp
             and "GAZELLE_FEL_ENABLE" not in cpp,
         "worker_message_passes_defer_flag":
             "OpenStream(msg->m_hints, std::move(msg->m_codec), msg->m_gazelleDeferred);" in cpp,
     }
+    # In the dormant worker, flush/reset must not create a decoder before
+    # a fresh post-seek AU. Both paths can reset the timeout without any codec.
+    reset_a = cpp.find("else if (pMsg->IsType(CDVDMsg::GENERAL_RESET))")
+    flush_a = cpp.find("else if (pMsg->IsType(CDVDMsg::GENERAL_FLUSH))", reset_a)
+    speed_a = cpp.find("else if (pMsg->IsType(CDVDMsg::PLAYER_SETSPEED))", flush_a)
+    reset_body = cpp[reset_a:flush_a] if 0 <= reset_a < flush_a else ""
+    flush_body = cpp[flush_a:speed_a] if 0 <= flush_a < speed_a else ""
+    rearm = ("if (m_gazelleDeferredStockOpen)\\n"
+             "        m_gazelleDeferredSince = std::chrono::steady_clock::now();")
+    guards["reset_guard"] = (
+        rearm in reset_body
+        and "GazelleEnsureDeferredStockCodec(" not in reset_body
+        and "m_packets.clear();" in reset_body
+    )
+    guards["flush_guard"] = (
+        rearm in flush_body
+        and "GazelleEnsureDeferredStockCodec(" not in flush_body
+        and "FlushMessages();" in flush_body
+    )
     # Read-only RPU probe MUST happen before a STOCK factory can touch input.
     packet_begin = cpp.find("else if (pMsg->IsType(CDVDMsg::DEMUXER_PACKET))")
     packet_section = cpp[packet_begin:] if packet_begin >= 0 else ""
@@ -106,6 +122,12 @@ def selftest(cpp: str, h: str, policy: str) -> None:
          h, policy),
         (cpp.replace("GazelleFEL::InspectFirstAU(", "GazelleFEL::InspectMissingAU("),
          h, policy),
+        (cpp.replace(
+            "else if (pMsg->IsType(CDVDMsg::GENERAL_RESET))",
+            "else if (pMsg->IsType(CDVDMsg::GENERAL_NEVER_RESET))"), h, policy),
+        (cpp.replace(
+            "else if (pMsg->IsType(CDVDMsg::GENERAL_FLUSH))",
+            "else if (pMsg->IsType(CDVDMsg::GENERAL_NEVER_FLUSH))"), h, policy),
     ]
     for a, b, c in variants:
         try:
@@ -113,7 +135,7 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         except AssertionError:
             continue
         raise AssertionError("NEGATIVE_MUTATION_ACCEPTED")
-    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=10 no_device=true")
+    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=12 no_device=true")
 
 
 def main() -> None:

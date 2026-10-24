@@ -14,6 +14,8 @@ on:
       - tests/TestGazelleFELPrecreateProbe.cpp
       - tests/TestGazelleFELRealLibdovi.cpp
       - tests/TestGazelleFELAuthenticRpu.cpp
+      - tools/gazelle-fel/compile-android-kodi-tus.py
+      - tests/TestGazelleCompileCommands.py
       - tests/stubs/libdovi/rpu_parser.h
       - tools/gazelle-fel/verify-deferred-open-source.py
   workflow_dispatch:
@@ -61,6 +63,10 @@ jobs:
             -fsanitize=undefined -fno-sanitize-recover=all \
             -Itests/stubs tests/TestGazelleFELPrecreateProbe.cpp -o /tmp/gazelle-rpu-probe-ubsan
           /tmp/gazelle-rpu-probe-ubsan
+      - name: Reject spoofed Android compiler commands (host-only)
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleCompileCommands.py
       - name: Explicit limitation notice
         run: |
           echo 'GAZELLE_KODI_DEFERRED_OFFLINE_CI_PASS compiled_shared_policy=true'

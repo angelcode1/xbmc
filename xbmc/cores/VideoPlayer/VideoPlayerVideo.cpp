@@ -8,6 +8,7 @@
 
 #include "VideoPlayerVideo.h"
 #include "GazelleDeferredOpenPolicy.h"
+#include "utils/GazelleFELPrecreateProbe.h"
 
 #include "DVDCodecs/DVDCodecUtils.h"
 #include "DVDCodecs/DVDFactoryCodec.h"
@@ -610,10 +611,27 @@ void CVideoPlayerVideo::Process()
     }
     else if (pMsg->IsType(CDVDMsg::DEMUXER_PACKET))
     {
-      // The existing shared_ptr message retains exact DemuxPacket ownership.
-      // This branch remains stock-only and cannot authorize FEL.
-      if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())
-        continue;
+      // The original CDVDMsgDemuxerPacket still owns this DemuxPacket and
+      // all of its timestamps, side-data, flags and crypto metadata.
+      // Only the permanently disabled stream-change research path can inspect
+      // the first immutable in-band AU before opening the STOCK codec.
+      // Parsed FEL/MEL identity never selects any OMX alias here.
+      if (m_gazelleDeferredStockOpen)
+      {
+        const auto pending = std::static_pointer_cast<CDVDMsgDemuxerPacket>(pMsg);
+        const DemuxPacket* original = pending->GetPacket();
+        if (original && !pending->GetPacketDrop() && original->iSize > 0)
+        {
+          const auto classification = GazelleFEL::InspectFirstAU(
+              original->pData, static_cast<std::size_t>(original->iSize),
+              m_hints.extradata.GetData(), m_hints.extradata.GetSize(),
+              original->cryptoInfo != nullptr || static_cast<bool>(m_hints.cryptoSession));
+          CLog::Log(LOGDEBUG, "Gazelle research first-AU read-only RPU result={}, stock_only=true",
+                    static_cast<unsigned>(classification.type));
+        }
+        if (!GazelleEnsureDeferredStockCodec())
+          continue;
+      }
       DemuxPacket* pPacket = std::static_pointer_cast<CDVDMsgDemuxerPacket>(pMsg)->GetPacket();
       bool bPacketDrop = std::static_pointer_cast<CDVDMsgDemuxerPacket>(pMsg)->GetPacketDrop();
 

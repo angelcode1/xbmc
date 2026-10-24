@@ -189,14 +189,27 @@ The read-only, production-linked `xbmc/utils/GazelleFELPrecreateProbe.h` previou
 
 **Limits:** this is genuine FFI metadata classification of a synthetic AU, not a demonstrated full Dolby Vision FEL enhancement-layer decode, real Blu-ray demux framer, Kodi initial precreate integration, or proven Android build. `kDeferredStockResearchEnabled=false` remains enforced. The separately running Android [compile-only job 40066897467](https://github.com/angelcode1/xbmc/actions/runs/40066897467) was still in `Build Android depends` at last check, and uses an older commit; its result would **not** compile or verify these Annex B changes. A later isolated Android compile of the current source head remains necessary. The working Kodi branch, Cube and six Magisk modules have not been touched.
 
-## Source-lifetime restrictions
+## 24 October 2026 — FIRST real Kodi Android ARMv7 two-TU compile PASS (older revision)
 
-- The video worker can receive `MSGQ_TIMEOUT` and call `ProcessDecoderOutput` even before any packet. Pending mode must guard this path before a null `m_pVideoCodec` dereference. The optional branch currently waits up to 500 ms and then uses stock; this is **not an owner-approved timing parameter** or a production latency claim.
-- `GENERAL_RESET` and `GENERAL_FLUSH` must exit pending mode safely; the helper creates the stock decoder and preserves the existing queue reset. Video stream changes drain the existing decoder, then replace it or enter disabled pending state.
-- `DEMUXER_PACKET` is still the original queue `shared_ptr` that owns `DemuxPacket*` and frees it exactly once. The code has **no packet-copy, no libdovi RPU inspection and no file/optical special-case injection**.
-- Stock decoder behavior must be compared in a full native Kodi CI/build. The source checker is not enough: build all relevant Android targets, inspect warnings, then perform non-device lifecycle/packet-queue tests on the actual Kodi types and all stream-change paths. Only after those gates can a separately reviewed libdovi first-NAL probe be considered.
-- **Do not** install the APK on the live Cube, enable the switch, change Magisk/vendor files, restart `media.codec`, alter SELinux, Kodi UDF/MMBD, HDMI, P8/HDR10 or satellite. Independent recovery R0 remains NO-GO.
+[GitHub Actions 40066897467](https://github.com/angelcode1/xbmc/actions/runs/40066897467), pinned to **source SHA `2f038b4a85bb274b16c944ee3fc3d161d714b597`**, completed **SUCCESS**. This was not a source-stub test: its Android NDK r28c/CMake-generated compiler commands compiled actual `xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp` and `xbmc/utils/BitstreamConverter.cpp`, after successfully constructing the `tools/depends` tree and internal FFmpeg/Fmt/Spdlog/PCRE2 prerequisites. Its log contains all three exact verification markers:
 
-## Exact current disposition
+```text
+GAZELLE_ANDROID_ARMV7_TU_PASS path=xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+GAZELLE_ANDROID_ARMV7_TU_PASS path=xbmc/utils/BitstreamConverter.cpp
+GAZELLE_ANDROID_ARMV7_TWO_TU_COMPILE_PASS video_worker=true bitstream_converter=true apk=false runtime=false authentic_fel=false no_device=true
+```
 
-**Isolated source branch: created and source guard verified.** No full Kodi build, Clang target compile, Kodi lifecycle test, live libdovi pre-create parser or FEL output. Existing branch untouched. The next step is verifying full Kodi target compilation plus testable stream-change worker sequencing on an isolated build host; absent that, this branch is a **non-deployable scaffold**.
+**Scope:** This confirms that **both precise source translation units compile** for Android ARMv7 at that historic SHA. It is **not a full Kodi build/link, APK, device test, enabled decoder, or FEL residual decode proof**. The later Kodi worker reset/flush correction and the Annex B first-AU parser were committed **after** `2f038b4a...`; run 40066897467 does not validate them.
+
+The follow-up [current-revision Android CI 40069505763](https://github.com/angelcode1/xbmc/actions/runs/40069505763), pinned to SHA `9c2a9aacbf11b61a65549c6df2717a782f75361e`, explicitly includes the updated worker and Annex B parser. At this checkpoint it was still in **`Build Android depends`**; do not infer current-source Clang success from the older PASS. No APK was packaged, signed, uploaded or installed in either workflow.
+
+## Source-lifetime restrictions and exact current disposition
+
+- On a pending **stream-change** decoder, the video worker can receive `MSGQ_TIMEOUT` before a packet. Pending mode guards all null-decoder output paths and falls back to the **stock** factory after at most an experimental 500ms from the latest reset/flush. This is **not a validated production timing parameter**.
+- `GENERAL_RESET` and `GENERAL_FLUSH` now restart the deadline, clear the existing packet/queue state, and **do not allocate a decoder** merely because of reset/seek. The older statement that they allocate stock was superseded by the source-only fix.
+- `DEMUXER_PACKET` is still the original Kodi queue `shared_ptr` that owns `DemuxPacket*`. The dormant worker **does read the original packet's immutable NAL bytes** through real libdovi now, without packet copying, RPU rewriting, decoder alias selection, file/optical special-case injection or ownership transfer. Both length-prefix and Annex B framing have genuine upstream RPU fixture CI; a real disc AU has not been verified.
+- The normal **initial** `OpenStream` still creates the stock decoder synchronously before first AU; read-only worker probe runs only in the disabled already-running **stream-change** path. Full Kodi link, actual Kodi queue-lifecycle race tests and initial-packet/seek-epoch correctness are still unverified.
+- At least one **earlier actual Android ARMv7 two-TU** compilation has passed. A subsequent exact current-head Android compile, full Kodi link, and no-device Kodi packet-queue integration tests remain necessary before any device deployment can even be considered.
+- **Do not** install an APK on the live Cube, enable the switch, change Magisk/vendor/OMX files, restart media.codec, alter SELinux, Kodi UDF/MMBD, HDMI, P8/HDR10 or satellite. Independent boot recovery R0 remains NO-GO.
+
+**Disposition: non-deployable, compile-time disabled source research.** Genuine FEL/MEL RPU metadata parsing and one older Android two-TU compile are verified; native FEL EL residual combine, first-open precreate, full Kodi runtime, device capability and independent recovery remain **unverified/unimplemented**.

@@ -50,6 +50,23 @@ def compile_units(database: Path, source_root: Path) -> None:
             compiler.is_relative_to(Path(ndk_root).resolve()) for compiler in compilers
         ):
             raise RuntimeError(f"NOT_PINNED_ANDROID_CLANG {suffix} command={argv[:2]}")
+        # Compile database metadata is not evidence that argv actually compiles
+        # the advertised TU. A full checkout path must appear in the real
+        # compiler command, with explicit compile-only mode and ARMv7 target.
+        cpp_args = [Path(arg) for arg in argv if arg.endswith(".cpp")]
+        compiled_paths = [
+            (cwd / arg).resolve() if not arg.is_absolute() else arg.resolve()
+            for arg in cpp_args
+        ]
+        if compiled_paths != [source] or "-c" not in argv:
+            raise RuntimeError(f"WRONG_COMPILED_SOURCE {suffix} matched={compiled_paths}")
+        if not any("armv7" in arg.lower() for arg in argv):
+            raise RuntimeError(f"NOT_ANDROID_ARMV7_COMMAND {suffix}")
+        if "-o" not in argv or argv.index("-o") + 1 >= len(argv):
+            raise RuntimeError(f"MISSING_OBJECT_OUTPUT {suffix}")
+        obj = Path(argv[argv.index("-o") + 1])
+        if obj.suffix != ".o":
+            raise RuntimeError(f"NOT_OBJECT_OUTPUT {suffix}")
         print(f"GAZELLE_ANDROID_ARMV7_TU_START path={suffix}", flush=True)
         proc = subprocess.run(
             argv, cwd=str(cwd), stdout=subprocess.PIPE,

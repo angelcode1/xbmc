@@ -69,10 +69,11 @@ jobs:
           echo 'CUBE_UNTOUCHED=true'
 
   real-libdovi-abi:
-    # Use the OS that actually packages 3.3.2; Ubuntu 24.04 ships no libdovi-dev.
-    # This is a host ABI check only, not a Kodi or Android build.
+    # Debian forky's 3.3.2-3+b1 rebuild has the COMPLETE libdovi header.
+    # Ubuntu resolute 3.3.2-3 ships a truncated 281-byte header (bug #1124682).
+    # Host ABI check only: not a Kodi or Android build.
     runs-on: ubuntu-24.04
-    container: ubuntu:26.04
+    container: debian:forky
     timeout-minutes: 12
     steps:
       - name: Install real packaged libdovi 3.3.2 and C++ compiler
@@ -90,6 +91,8 @@ jobs:
         run: |
           set -eu
           test -f /usr/include/libdovi/rpu_parser.h
+          grep -Fq dovi_parse_unspec62_nalu /usr/include/libdovi/rpu_parser.h
+          test "$(wc -c < /usr/include/libdovi/rpu_parser.h)" -gt 10000
           echo '=== INSTALLED HEADER DECLARATIONS ==='
           sed -n '1,180p' /usr/include/libdovi/rpu_parser.h
           echo '=== EXPORTS ==='

@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 namespace GazelleFELPrecreate
@@ -146,6 +147,34 @@ public:
       ready.original[i] = std::move(m_original[i]);
     ClearMetadata();
     return ready;
+  }
+
+  // Synchronous all-or-nothing acceptance for a *host-modeled* downstream
+  // handoff. A false/noexcept acknowledgment leaves EVERY original message
+  // in this holder with identical IDs/ordering/bytes; no silent loss on
+  // downstream refusal. True is an explicit guarantee that the callback
+  // retained each original or finished synchronous processing before return.
+  // The caller must serialize this check+callback with producer seek
+  // publication; real Kodi worker delivery/backpressure remains UNWIRED.
+  template <class Accept>
+  bool AcceptAfterBarrier(std::uint64_t publishedEpoch,
+                          std::uint64_t appliedEpoch,
+                          std::uint64_t nowTicks,
+                          Accept&& accept) noexcept
+  {
+    static_assert(std::is_nothrow_invocable_r_v<
+                      bool, Accept, const std::array<Owner, kMaxAwaitBarrierOwners>&,
+                      std::size_t>,
+                  "Owner acceptance callback must be bool noexcept");
+    if (Inspect(publishedEpoch, appliedEpoch, nowTicks) !=
+        AwaitState::ReadyAfterBarrier)
+      return false;
+    if (!std::forward<Accept>(accept)(m_original, m_size))
+      return false;
+    for (auto& owner : m_original)
+      owner.reset();
+    ClearMetadata();
+    return true;
   }
 
   // Explicit seek/close revocation; destroys only previously RETAINED owner

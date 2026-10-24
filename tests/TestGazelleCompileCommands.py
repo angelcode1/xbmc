@@ -77,7 +77,7 @@ with tempfile.TemporaryDirectory() as temp:
     assert recover("fatal error: 'pcre2.h' file not found", {"build-pcre2"}) is None
     assert recover("error: bad application source", set()) is None
     assert recover(
-        "fatal error: 'pcre2.h' file not found\\n"
+        "fatal error: 'pcre2.h' file not found\n"
         "fatal error: 'fmt/format.h' file not found", set()
     ) is None
     print("GAZELLE_ANDROID_COMPILE_COMMANDS_SOURCE_SELFTEST_PASS "

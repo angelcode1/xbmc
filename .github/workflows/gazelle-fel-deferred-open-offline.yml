@@ -13,6 +13,7 @@ on:
       - xbmc/utils/GazelleFELPrecreateProbe.h
       - tests/TestGazelleFELPrecreateProbe.cpp
       - tests/TestGazelleFELRealLibdovi.cpp
+      - tests/TestGazelleFELAuthenticRpu.cpp
       - tests/stubs/libdovi/rpu_parser.h
       - tools/gazelle-fel/verify-deferred-open-source.py
   workflow_dispatch:
@@ -81,7 +82,7 @@ jobs:
           set -eu
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            ca-certificates git g++ libdovi-dev pkg-config
+            ca-certificates curl git g++ libdovi-dev pkg-config
           dpkg-query -W -f='libdovi-dev=${Version}\n' libdovi-dev
           test "$(dpkg-query -W -f='${Version}' libdovi-dev | cut -d- -f1)" = "3.3.2"
       - uses: actions/checkout@v4
@@ -103,3 +104,21 @@ jobs:
           ldd /tmp/gazelle-real-libdovi | grep -F libdovi
           /tmp/gazelle-real-libdovi
           echo 'GAZELLE_REAL_LIBDOVI_HOST_ABI_GATE_PASS full_kodi_build=false real_FEL_fixture=false no_device=true'
+      - name: Test genuine upstream Profile 7 FEL/MEL RPUs against libdovi
+        run: |
+          set -eu
+          # Public upstream test assets, pinned by Git blob SHA; no binary
+          # fixtures are copied into this repository or uploaded as artifacts.
+          base='https://raw.githubusercontent.com/quietvoid/dovi_tool/libdovi-3.3.2/assets/tests'
+          curl --proto '=https' --tlsv1.2 -fLsS --retry 3 \
+            "$base/fel_orig.bin" -o /tmp/gazelle-upstream-fel.bin
+          curl --proto '=https' --tlsv1.2 -fLsS --retry 3 \
+            "$base/mel_orig.bin" -o /tmp/gazelle-upstream-mel.bin
+          test "$(git hash-object /tmp/gazelle-upstream-fel.bin)" = \
+            a7926febb39043d938ebc49dce0a4c043b5b32f0
+          test "$(git hash-object /tmp/gazelle-upstream-mel.bin)" = \
+            09b8963ddaee4e2c5554b9682987a72278edf53c
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELAuthenticRpu.cpp -ldovi -o /tmp/gazelle-rpu-authentic
+          /tmp/gazelle-rpu-authentic \
+            /tmp/gazelle-upstream-fel.bin /tmp/gazelle-upstream-mel.bin

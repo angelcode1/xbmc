@@ -26,6 +26,7 @@ BRIDGE_TEST = r"""
 #include "GazelleFELPrecreateKodiBridge.h"
 #include "GazelleFELProducerEpoch.h"
 #include "GazelleFELPrecreateAdmission.h"
+#include "GazelleFELAwaitBarrierOwners.h"
 
 #include <cassert>
 #include <cstdio>
@@ -253,6 +254,73 @@ int main() {
     queue.End();
   }
 
+  // AwaitBarrier holding integrated with actual Kodi-linked queue and typed
+  // ORIGINAL packet owners. A synthetic high-priority new-epoch delivery is
+  // injected to exercise the inversion; real producer/worker ingress remains
+  // UNWIRED and caller backpressure is NOT implemented in live Kodi.
+  {
+    using Hold = GazelleFELPrecreate::AwaitBarrierOwners<CDVDMsgDemuxerPacket>;
+    using HoldCode = GazelleFELPrecreate::AwaitHoldResult;
+    using HoldState = GazelleFELPrecreate::AwaitState;
+    unsigned freed=0;
+    CDVDMessageQueue queue("gazelle-linked-await-barrier");
+    queue.Init(); queue.SetMaxDataSize(10000);
+    Ingress sender(queue);
+    Hold hold(50);
+    assert(sender.PutBarrier([](std::uint64_t) {
+      return std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH);
+    }));
+    assert(sender.ProducerEpochForAuditOnly()==2);
+    // Synthetic queue injection at priority 10 to force delivery before the
+    // priority-1 flush. No real Kodi producer path generates such an initial
+    // high-priority message; safety gate must still refuse early stock feed.
+    for (int id=70; id<73; ++id) {
+      auto original=Original(id, id==71, &freed);
+      assert(original->TrySetGazelleResearchEpoch(2));
+      assert(queue.Put(original,10)==MSGQ_OK);
+      original.reset();
+    }
+    std::shared_ptr<CDVDMsgDemuxerPacket> thirdCallerRetains;
+    for (int i=0;i<3;++i) {
+      std::shared_ptr<CDVDMsg> next;
+      int priority=0;
+      assert(queue.Get(next,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+      assert(priority==10);
+      auto original=std::static_pointer_cast<CDVDMsgDemuxerPacket>(std::move(next));
+      assert(GazelleFELPrecreate::ClassifyEpoch(
+          original->GetGazelleResearchEpoch(),2,1)==
+          GazelleFELPrecreate::Admission::AwaitBarrier);
+      const auto result=hold.TryHold(original,2,2,1,
+                                     static_cast<std::size_t>(original->GetPacket()->iSize),
+                                     static_cast<std::uint64_t>(i));
+      if (i<2) {
+        assert(result==HoldCode::HeldOriginal && !original);
+      } else {
+        assert(result==HoldCode::CallerMustRetain && original);
+        thirdCallerRetains=std::move(original);
+      }
+    }
+    assert(hold.Size()==2 && hold.Bytes()==40 && freed==0);
+    assert(hold.Inspect(2,1,60)==HoldState::DeadlineNeedsControlRecovery);
+    assert(hold.TakeAfterBarrier(2,1,60).count==0);
+    assert(hold.Size()==2 && freed==0);
+    std::shared_ptr<CDVDMsg> flush;
+    int priority=0;
+    assert(queue.Get(flush,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(priority==1 && flush->IsType(CDVDMsg::GENERAL_FLUSH));
+    flush.reset();
+    auto ready=hold.TakeAfterBarrier(2,2,60);
+    assert(ready.count==2 && ready.original[0]->GetPacket()->iStreamId==70 &&
+           ready.original[1]->GetPacket()->iStreamId==71);
+    assert(!hold.Size() && thirdCallerRetains->GetPacket()->iStreamId==72);
+    ready.original[0].reset();
+    ready.original[1].reset();
+    assert(freed==2);
+    thirdCallerRetains.reset(); // caller, not hold, still owned overflow
+    assert(freed==3 && queue.GetDataSize()==0);
+    queue.End();
+  }
+
   std::puts("GAZELLE_KODI_TYPED_BRIDGE_LINK_HOST_PASS "
             "original_kodi_queue_and_messages=true "
             "borrow_epoch_from_original=true priority_flush_overtake=true "
@@ -262,6 +330,8 @@ int main() {
             "queue_accounting_preserved=true retry_priority_10_overtakes_flush_1=true "
             "retry_before_barrier_requires_external_epoch_watermark=true "
             "dual_epoch_admission_rejects_stale_and_premature_new=true "
+            "bounded_await_barrier_originals=2 preflush_no_stock=true "
+            "overflow_caller_retains=true expired_hold_requires_barrier=true "
             "external_platform_demux_shims=true "
             "no_real_worker=true no_device=true fel_switch_off=true");
 }

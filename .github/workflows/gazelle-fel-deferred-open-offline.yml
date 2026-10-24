@@ -25,6 +25,8 @@ on:
       - tests/TestGazelleActualKodiQueueHost.py
       - tests/TestGazelleKodiQueueObjectLink.py
       - tests/TestGazelleKodiQueueRealMessageHeaders.py
+      - tests/TestGazelleKodiTypedBridgeLinkedHost.py
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h
       - xbmc/cores/VideoPlayer/DVDMessage.cpp
       - tests/TestGazelleKodiProducerStampSource.py
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h
@@ -137,6 +139,11 @@ jobs:
           set -euo pipefail
           python3 -S tests/TestGazelleKodiQueueRealMessageHeaders.py
           python3 -S tests/TestGazelleKodiQueueRealMessageHeaders.py --ubsan
+      - name: Execute real Kodi typed BL EL owner bridge with unchanged queue and packet methods
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleKodiTypedBridgeLinkedHost.py
+          python3 -S tests/TestGazelleKodiTypedBridgeLinkedHost.py --ubsan
       - name: Reject spoofed Android compiler commands (host-only)
         run: |
           set -euo pipefail

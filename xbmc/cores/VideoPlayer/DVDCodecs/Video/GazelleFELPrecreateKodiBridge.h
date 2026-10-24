@@ -29,13 +29,16 @@ static_assert(!KODI::VIDEO::GAZELLE::kDeferredStockResearchEnabled,
 // Do not construct another message around that same raw pointer: ownership
 // belongs exclusively to the ORIGINAL shared message object.
 inline GazelleFELPrecreate::LayerInfo BorrowInfo(
-    const Owner& original, std::uint64_t seekEpoch,
-    bool streamProtected) noexcept
+    const Owner& original, bool streamProtected) noexcept
 {
   GazelleFELPrecreate::LayerInfo info{};
-  info.epoch = seekEpoch;
   if (!original)
     return info;
+  // Source-issued, single-assignment original-message generation ONLY.
+  // Worker-dequeue-time stamping is unsafe because priority flush can
+  // overtake already enqueued BL/EL packets. Untagged stock messages have
+  // generation 0 and must never be accepted as pre-create pair owners.
+  info.epoch = original->GetGazelleResearchEpoch();
   const DemuxPacket* const packet = original->GetPacket();
   if (!packet)
     return info;
@@ -59,10 +62,14 @@ inline GazelleFELPrecreate::LayerInfo BorrowInfo(
 // genuine queue/flush epoch provenance and exactly-once stock re-delivery.
 // PairMetadataOnly is NEVER a FEL decoder selection decision.
 inline Gate::Result ObserveOriginal(
-    Gate& gate, Owner original, std::uint64_t seekEpoch,
-    bool streamProtected) noexcept
+    Gate& gate, Owner original, bool streamProtected) noexcept
 {
-  const auto info = BorrowInfo(original, seekEpoch, streamProtected);
+  const auto info = BorrowInfo(original, streamProtected);
+  // A 0-generation owner came from ordinary stock Kodi; it can never
+  // authenticate a seek-epoch BL/EL pair. Fail closed, no cloning/replay.
+  if (info.epoch == 0)
+    return {GazelleFELPrecreate::Disposition::StockFallback, {},
+            std::move(original)};
   return gate.Observe(std::move(original), info);
 }
 } // namespace GazelleFELPrecreateKodi

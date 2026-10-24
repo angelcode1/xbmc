@@ -463,6 +463,32 @@ int main() {
     fence.Close(); queue.End();
   }
 
+  // Epoch zero is uninitialized and epoch UINT64_MAX cannot wrap: even
+  // intentionally malformed control messages cannot reopen a closed fence.
+  {
+    using Fence = GazelleFELPrecreate::SeekFence<CDVDMsgDemuxerPacket,
+                                                  CDVDMessageQueue>;
+    using Decision = GazelleFELPrecreate::FenceDecision;
+    unsigned freed=0;
+    CDVDMessageQueue queue("gazelle-linked-epoch-wrap");
+    queue.Init(); queue.SetMaxDataSize(10000);
+    Fence zero(queue,10,0);
+    auto packet=Original(95,false,&freed);
+    assert(zero.EnqueueOriginal(packet)==Decision::Refused);
+    assert(zero.PublishBarrier([](std::uint64_t) {
+      return std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH);
+    },0)==Decision::Refused);
+    packet.reset();
+    assert(freed==1);
+    Fence maxed(queue,10,~std::uint64_t{0});
+    assert(maxed.PublishBarrier([](std::uint64_t) {
+      return std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH);
+    },1)==Decision::Refused);
+    assert(maxed.BarrierApplied(0,2)==Decision::Refused);
+    assert(!queue.GetDataSize());
+    zero.Close(); maxed.Close(); queue.End();
+  }
+
   std::puts("GAZELLE_KODI_TYPED_BRIDGE_LINK_HOST_PASS "
             "original_kodi_queue_and_messages=true "
             "borrow_epoch_from_original=true priority_flush_overtake=true "
@@ -477,6 +503,7 @@ int main() {
             "serialized_epoch_fence_with_real_queue=true "
             "concurrent_commit_precedes_seek_publication=true "
             "rejected_barrier_handoff_retains_original=true "
+            "zero_and_wrapped_epoch_refused=true "
             "external_platform_demux_shims=true "
             "no_real_worker=true no_device=true fel_switch_off=true");
 }

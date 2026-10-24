@@ -508,8 +508,11 @@ void CVideoPlayerVideo::Process()
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_RESET))
     {
-      if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())
-        continue;
+      // A pending decoder has no state to reset. A reset must not eagerly
+      // instantiate stock before the next post-reset AU can be inspected.
+      // The bounded timeout restarts; the pending packet is never retained.
+      if (m_gazelleDeferredStockOpen)
+        m_gazelleDeferredSince = std::chrono::steady_clock::now();
       if(m_pVideoCodec)
         m_pVideoCodec->Reset();
 
@@ -526,8 +529,11 @@ void CVideoPlayerVideo::Process()
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_FLUSH)) // private message sent by (CVideoPlayerVideo::Flush())
     {
-      if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())
-        continue;
+      // Seeking/flush invalidates queued AUs. Never create the stock codec
+      // merely to flush an unallocated candidate; wait for a fresh packet
+      // or fall back to stock after the restarted 500ms timeout.
+      if (m_gazelleDeferredStockOpen)
+        m_gazelleDeferredSince = std::chrono::steady_clock::now();
       bool sync = std::static_pointer_cast<CDVDMsgBool>(pMsg)->m_value;
       if(m_pVideoCodec)
         m_pVideoCodec->Reset();

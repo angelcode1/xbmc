@@ -25,6 +25,10 @@ def check(cpp: str, h: str, policy: str) -> None:
         "worker_imports_compiled_policy":
             '#include "GazelleDeferredOpenPolicy.h"' in cpp
             and "KODI::VIDEO::GAZELLE::UseDeferredStock(inputs)" in cpp,
+        "kodi_message_bridge_compiled_but_unwired":
+            '#include "DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h"' in cpp
+            and "GazelleFELPrecreateKodi::ObserveOriginal(" not in cpp
+            and "GazelleFELPrecreateKodi::BorrowInfo(" not in cpp,
         "candidate_without_implicit_fel":
             "hint.dovi.dv_profile == 7" in cpp
             and "hint.dovi.el_present_flag != 0" in cpp
@@ -151,6 +155,10 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         (cpp + "\n// OMX.gazelle.research\n", h, policy),
         (cpp.replace("m_bStop = true;\n  return false;", "StopThread();\n  return false;"),
          h, policy),
+        (cpp.replace("DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h",
+                     "DVDCodecs/Video/GazelleFELPrecreateMissing.h"), h, policy),
+        (cpp + "\n// GazelleFELPrecreateKodi::ObserveOriginal(bridge, packet, epoch, protected);\n",
+         h, policy),
         (cpp.replace("GazelleFEL::InspectFirstAU(", "GazelleFEL::InspectMissingAU("),
          h, policy),
         (cpp.replace("IsGazelleDeferredStockCandidate(hint, false)",
@@ -176,7 +184,7 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         except AssertionError:
             continue
         raise AssertionError("NEGATIVE_MUTATION_ACCEPTED")
-    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=17 no_device=true")
+    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=19 no_device=true")
 
 
 def main() -> None:

@@ -50,6 +50,9 @@ on:
       - tools/gazelle-fel/compile-android-kodi-tus.py
       - tests/TestGazelleCompileCommands.py
       - tests/stubs/libdovi/rpu_parser.h
+      - docs/GAZELLE_FEL_ANDROID_MASTER_PLAN.md
+      - tools/gazelle-fel/audit-coreelec-first-init.py
+      - tools/gazelle-fel/README-CE-DELTA.md
       - tools/gazelle-fel/verify-deferred-open-source.py
   workflow_dispatch:
 
@@ -64,6 +67,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Verify pinned CoreELEC FEL-before-open source contract and Kodi hard-OFF mode
+        run: |
+          set -euo pipefail
+          python3 -S tools/gazelle-fel/audit-coreelec-first-init.py --selftest --kodi-root .
+          python3 -S tools/gazelle-fel/audit-coreelec-first-init.py --verify-upstream --kodi-root .
       - name: Refuse unsafe source modification
         run: |
           set -euo pipefail

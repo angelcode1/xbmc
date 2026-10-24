@@ -1,4 +1,4 @@
-# Gazelle FEL — disabled Kodi worker deferred-open experiment
+> **SINGLE AUTHORITATIVE GAZELLE FEL DIRECTION (24 October 2026):** [docs/GAZELLE_FEL_ANDROID_MASTER_PLAN.md](../../../docs/GAZELLE_FEL_ANDROID_MASTER_PLAN.md). CoreELEC FEL works on this hardware; next P1 is session-scoped Android native stream init, **not** additional host seek models. This file remains the historical offline engineering ledger. FEL stays OFF.\n\n# Gazelle FEL — disabled Kodi worker deferred-open experiment
 
 **Research branch:** `research/gazelle-fel-deferred-open-offline-20261024`
 **Base:** `research/gazelle-fireos-fel-20261019`

@@ -1,0 +1,86 @@
+# Gazelle / Fire TV Cube 3 — Dolby Vision Profile 7 FEL: authoritative Android plan
+
+**Single source of truth for the FEL work in `angelcode1/xbmc`.** 24 October 2026. Maintained development target: `research/gazelle-fireos-fel-20261019`. This document supersedes conflicting *priorities*, not prior technical evidence, and links to the detailed source reports rather than duplicating 150+ research notes. **Do not activate FEL or deploy a native service overlay based only on this document.**
+
+> **One-sentence plan:** CoreELEC already plays FEL on this Cube. Adapt the *early, verified FEL-before-decoder-open decision* and the *stream-mode / paired native decode path* to Fire OS's actual OMX component and V4L/Surface lifetime **without global controls**, then prove residual-sensitive output; only afterward wire the preserved Kodi seek models and package an add-on plus a narrowly scoped systemless helper.
+
+## Working branches and preservation contract
+
+- **Kodi fork:** [`angelcode1/xbmc`](https://github.com/angelcode1/xbmc); working feature branch `research/gazelle-fireos-fel-20261019`. Research PR [#6](https://github.com/angelcode1/xbmc/pull/6) preserved ~158 earlier changes and the host output model via **merge** [`476e560`](https://github.com/angelcode1/xbmc/commit/476e560534810ae739fd5bdb4e43f3f484072318); PR [#7](https://github.com/angelcode1/xbmc/pull/7) preserved the stricter output-index invalidation order via **merge** [`6f9e5f4`](https://github.com/angelcode1/xbmc/commit/6f9e5f408e0f1ecd02f38486657dae3c2f13c1a3). Retain both research branches; do not squash, force-push or delete prior work.
+- **Device research and optical integration:** [`angelcode1/cube3`](https://github.com/angelcode1/cube3), especially `research/gazelle-fel-no-fork-observer-20261021`. This branch has extensive original-ELF findings, preflights and the device evidence. Its earlier, conflicting handoff recommendations are **historical**, not additional to-do lists. Keep the unrelated debloat and Dolby Vision branches alone.
+- **Feature OFF:** [`GazelleDeferredOpenPolicy.h`](../xbmc/cores/VideoPlayer/GazelleDeferredOpenPolicy.h) requires `kDeferredStockResearchEnabled=false` and a `static_assert`. Host evidence tests are *not* production native proof. No new Kodi APK, Magisk/Zygisk module, native OMX plugin or SELinux/kernel modifications are authorized by a passing host test.
+- **Operational baseline protected:** physical optical UDF/MMBD and MakeMKV, installed Kodi and its app UID, HDR10/P8, HDMI passthrough/coexistence, voice satellite, the six existing Magisk modules and the bootable stock vendor media service.
+
+## Evidence ledger: what is actually solved (and what it proves)
+
+| Gate | Result / strongest evidence | Limit |
+| --- | --- | --- |
+| Hardware FEL capability | **YES** — owner confirms CoreELEC Profile 7 FEL playback on this **same** Cube 3, and CE 22 advertises FEL support on compatible SoCs | Different Linux 5.15 Amlogic media path; does not imply Android OMX supports it directly |
+| Working Fire OS Dolby playback | **YES** — existing Android OMX `OMX.amlogic.dolby-vision.dvhe.decoder` and V4L/Surface output | Ordinary DV/HDR10 is not FEL |
+| Kodi P7 AU identification and input | **YES in observed sample** — 48 real in-band BL+EL+RPU AUs, all 48 input copies matched; actual RPU metadata classified FEL. Authentic upstream FEL/MEL RPU tests pass with real libdovi 3.3.2 | Proves bytes delivered on app side, **not** native EL consumption or picture fidelity; paired-demux tests were not exercised in that 48-AU sample |
+| Android FEL residual output | **NO** — latest recorded P7 run had `/dev/amstream_dves_hevc_frame`, `dvbldec(1)` and **`dveldec(0)`**, HDR10 output; two FEL-sensitive visual tests failed | Current candidate is BL-only/metadata path; this is *not* silicon inability |
+| Native stream and linked decoder | **COMPILED PATH MAPPED** — exact Fire OS original `stream_input.ko` flags and `decoder_common.ko` show conditional master/slave VDEC allocation/initialization and shared input; `/dev/amstream_dves_hevc` is the alternative stream port | Not exercised with Fire OS MediaCodec and its `/dev/video30` V4L/Surface/fence output |
+| Android early decoder selection | **ROOT DIVERGENCE LOCATED** — compiled `libOmxVideo.so` reads stream-mode decisions before `codec_init`; current Kodi/Stagefright created the P7 decoder in frame mode | No safe *per-instance* FEL/MEL-bound mode setter has been demonstrated; `codec_para_t+0x5c` bit `0x40` is **not** a stream-mode selector |
+| OMX plugin interception | **REAL ABI AND INERT PROTOTYPES** — active `/system/lib/vndk-28/libstagefright_omx.so` loads stock plugin and has an optional Dolby plugin slot; ARM32 disposable plugin passed 32 factory/destroy loops in a standalone shell process | **NOT** loaded through actual `u:r:mediacodec:s0` service/vendor linker and no component delegation; optional plugin has no working decoder |
+| GPU fallback | Main10 public no-Surface decoder returned 8-bit YUV420 despite 10-bit input; portable GPU bridge host tests exist | App-visible 8-bit output cannot recover original FEL fidelity; do not promote GPU path without a proven 10-bit image source |
+| Kodi packet ownership/seek safety | Many linked host queue/message tests plus host dispatch, native proof and output-generation models pass; corrections merged | Models remain **UNWIRED** and synthetic; no real decoder quiescence witness |
+| Kodi builds | Android ARMv7 actual two translation units built in CI; current host source/real-libdovi CI green | No **exact-head full Kodi Android APK** with native FEL adapter or live test |
+| Recovery | Partition topology, Magisk mounts, active init process + SELinux, vendor linker namespace inventoried; inert module ZIP safe by design | Independent **preboot single-FEL-module rollback (R0)** not demonstrated; **no service overlay test authorized** |
+
+Primary original run: [Cube3 real P7 APK result](https://github.com/angelcode1/cube3/blob/research/gazelle-fel-no-fork-observer-20261021/docs/gazelle-fel-real-p7-kodi-apk-20261022-downstream-omx-blocked.md); [observed FDs](https://github.com/angelcode1/cube3/blob/research/gazelle-fel-no-fork-observer-20261021/docs/gazelle-fel-verified-frame-port-and-v4lvideo30-live-20261022.md); [exact Fire OS paired decoder](https://github.com/angelcode1/cube3/blob/research/gazelle-fel-no-fork-observer-20261021/docs/gazelle-fel-exact-fireos-kernel-paired-input-20261022.md); [loaded OEM factory](https://github.com/angelcode1/cube3/blob/research/gazelle-fel-no-fork-observer-20261021/docs/gazelle-fel-active-hw-plugin-factory-20261023.md); [optional VNDK loader](https://github.com/angelcode1/cube3/blob/research/gazelle-fel-no-fork-observer-20261021/docs/gazelle-fel-active-vndk28-optional-plugin-20261024.md); [R0](https://github.com/angelcode1/cube3/blob/research/gazelle-fel-no-fork-observer-20261021/docs/gazelle-fel-recovery-first-optional-loader-test-plan-20261024.md).
+
+## Decisive CoreELEC → Fire OS divergence: now traced to exact code
+
+**Important reproducibility qualification:** The following are pins in the public **CoreELEC `coreelec-22` package manifest at audit time**, not an assertion that the owner's installed CoreELEC image matches that build. Pin exact owner's CE version later if it changes the native contract. `projects/Amlogic-ce/packages/mediacenter/kodi/package.mk` pins CoreELEC Kodi [`884eab3a40712e7a853db68eb114d712e9600fc2`](https://github.com/CoreELEC/xbmc/commit/884eab3a40712e7a853db68eb114d712e9600fc2); the media module package pins [`c15aebb1ac93028d0aceadf8f35dda2204d33424`](https://github.com/CoreELEC/media_modules-aml/commit/c15aebb1ac93028d0aceadf8f35dda2204d33424). Verify the pins with `tools/gazelle-fel/audit-coreelec-first-init.py`, which uses pinned Git blob identities and fails closed.
+
+| Boundary | CoreELEC positive source path (pin above) | Observed Fire OS / porting requirement |
+| --- | --- | --- |
+| First AU and FEL/MEL classification | `DVDVideoCodecAmlogic.cpp::AddData`, lines ~584/630: `GetDoviIsFEL()` **before** `m_Codec->OpenDecoder(m_hints, doviIsFEL)` | Current Android `CVideoPlayerVideo::OpenStream` creates the stock decoder **before first AU**, unless disabled research path is ever enabled. Must preserve trusted **original AU** lifetime before factory, not infer FEL from `profile=7` alone |
+| Component setup | `AMLCodec.cpp::OpenDecoder`, lines ~2335/2396–2400: default `STREAM_TYPE_FRAME`; verified FEL under DV-enabled P4/P7 condition sets `STREAM_TYPE_STREAM` **before** `codec_init_para`/`codec_init` | Android native constructor/`intitalizeCodec` selects proprietary `codec_para_t+0x10a0` frame/stream early. Need a *local session-specific* early selector; cannot globally `setprop` or mutate raw `codec_para_t` layout on guesses |
+| Linux Dolby controls | Same CE block writes `dv_debug "enable_fel 1"`, `"enable_mel 1"`; HEVC case uses `nal_skip_policy` 1 in stream mode, 2 otherwise | These are CE **global** DRM/sysfs actions. They are **not an Android patch recipe**; global controls would affect other clients, may target unrelated ABI and are excluded without independent isolation/recovery |
+| VDEC allocation | CE pinned `drivers/stream_input/amports/amstream.c::amstream_open`, ~1558: `vdec_create(port,NULL)`; slave only under `!PORT_TYPE_FRAME && (PORT_TYPE_DUALDEC || debug flags & 0x100)` | Exact Fire OS `stream_input.ko` independently has a comparable branch with different flags. Compiled possibility **≠** Android runtime `dveldec(1)`; must prove paired decoder is created with EL input |
+| Output | CE AMLCodec opens `/dev/video10` (direct Amlogic/Linux path) | Android OEM `media.codec` opens `/dev/video30`, native OMX V4L, Surface/UVM/fence path; never assume CE `/dev/video10`, `dv_debug` or frame lifecycle can be transplanted |
+
+**Precise diagnosis:** It is **not** “missing P7 hardware” and is not chiefly “missing a second EL file descriptor.” In the observed Fire OS sample, intact combined AUs reached the OEM decoder but the **wrong input mode/native decoder topology** was chosen prior to ingestion. The first end-to-end research objective is **safe, instance-scoped early selection plus preserved Android native output**. Everything else follows proof of that hypothesis.
+
+## One critical path; no parallel tangents
+
+**P0 — completed here: source difference pinned.** Compare actual CE `GetDoviIsFEL()` → native stream-init to Android `OpenStream`/`OMX_GetHandle` → frame-mode `codec_init`. Check CE source pins with new audit script and retain the build/version limitation.
+
+**P1 — next: choose and prove the smallest safe Android initiation seam (no device changes yet).** The existing optional VNDK-28 Dolby plugin slot is the primary candidate *loader location*; it is not a decoder implementation. Trace where a trusted Kodi first-AU FEL/MEL verdict can be bound to **exactly one** requested native component *before* the original OEM initializer, under SELinux/domain, IPC and OMX role/MediaCodecList constraints. Prefer a self-contained plugin/handler that delegates to the stock vendor component and preserves P8/MEL/HDR10 behavior. If no robust pre-init binding exists, a Kodi-scoped, separately owned native decoder is fallback. Do **not** misrepresent a test-only alias or same-process host `dlopen` as proof of real service loading.
+
+P1 deliverable must be a **single source-level integration design** with the authentic session identifier, pre-init data path, unmodified OEM delegation entrypoint, all failure cases, and what live evidence would falsify it. **Reject** a design that requires only a global `stream_mode`, private `profile 0x10`, `codec_para_t+0x5c` bit 0x40, undocumented arbitrary property, late codec reset/VFM change, or silently redirects every Dolby session.
+
+**P2 — independent R0 recovery before ANY vendor/media-service deployment.** Verify preboot recovery for the exact firmware that can disable just the prospective FEL module while preserving the existing six Magisk modules. No boot loader flash, unverified TWRP, service restart or vendor mount until that gate is demonstrated. The known standalone ARM32 test is *not* R0.
+
+**P3 — optional live inert OMX loading and then a *single* nonprotected FEL canary.** Only after P1+P2: prove exact service linker/SELinux load, safe plugin create/destroy without replacing stock components, authenticated P7 FEL session alias, OEM stream path, paired BL/EL decoding and V4L/Surface ownership. Require rollback after a timeout/error. Measure `/proc/.../fd`, decoder/EL state, native logs and display contract; do not alter unrelated playback.
+
+**P4 — prove genuine FEL output.** Acceptance is a **residual-sensitive** comparison with the already working CoreELEC reference (e.g. All Layers EL-only image / Power Rangers correct credits) *plus* correct decode, display, frame timing, seek/teardown, no global regressions. `DV output`, RPU detection, `dveldec(1)` or successful plugin load **alone** do not pass.
+
+**P5 — Kodi add-on + optional Magisk systemless component + minimal upstream-syncable fork.** Add-on handles discovery, UI, physical-disc tiles, settings and diagnostics; native decoder cannot be supplied solely by a generic script add-on. Zygisk injection in Kodi **cannot directly enter** the init-owned OMX service; use only if a specific Kodi-process boundary warrants it. A narrowly patched Kodi fork handles first-AU/admission/native decoder seam where add-on APIs cannot. Reuse dormant queue/seek/output models *only after* P3–P4 show real native lifetimes.
+
+### Time gates and falsification
+
+- **First focused session, 1–3 engineering days:** P1 design bound to concrete CE source and Fire OS symbols plus identity channel. If early per-instance selection cannot be justified, explicitly switch to isolated decoder ownership; **no additional general ELF tours**.
+- **Next 3–7 days (if P1 works):** R0 and safe test infrastructure, with stop if recovery cannot be independently demonstrated. No calendar promise or unsafe workaround for R0.
+- **Next 4–10 days (conditional):** prove an actual native paired decode + residual-sensitive output canary. If stream-port access drops the Android V4L/Surface contract or vendor decoder won't initialise, document the decisive incompatibility, do not move to Kodi cosmetics.
+- **Then 1–3 weeks:** integrate, regression-test and package. Planning estimate **2–4 focused engineering weeks for first Android FEL image, 4–8 weeks for a maintainable solution**, with longer risk if Amazon's driver is incompatible. This is a range, not a guarantee.
+
+### Stop doing / never infer again
+
+1. **Don't re-prove hardware capability:** CoreELEC on this device already succeeds.
+2. **Don't repeat RPU/48-packet/host pairing tests** without a new Android data-path failure. Those gates already passed.
+3. **Don't add generic seek/renderer host models** until actual Android native playback creates a specific contract question. Existing models are preserved and disabled.
+4. **Don't infer `dveldec` or actual FEL from codec names, `el_present`, RPU logs, metadata-only libdovi or OMX role declarations.**
+5. **Don't replay dismissed hypotheses**: `codec_write_sub_data`/`/dev/amstream_sub` is not a proved EL feeder; `codec_para_t+0x5c` bit `0x40` is not a stream-mode selector; Main10 public 8-bit raw image is not a valid GPU FEL source; Kodi Zygisk does not reach init's OMX service by default. Dolby callback registrar/kallsyms research contains corrections; use latest corrected evidence, not obsolete negative claims.
+6. **Don't force device-wide properties, kernel `enable_fel`, VFM remaps, arbitrary OMX aliases, MediaCodec restart, boot/vendor modifications or service overlay** before R0 and scope proof.
+
+## Continuation checklist (for every future session)
+
+1. Read **this document first**. Name the *exact* P-stage and its missing acceptance evidence.
+2. Check the [maintained Kodi branch](https://github.com/angelcode1/xbmc/tree/research/gazelle-fireos-fel-20261019), Cube3 device docs and pinned original firmware hashes. Treat third-party CoreELEC as **reference source** unless the owner's build ID is confirmed.
+3. Run or inspect the source-only pinned comparison `tools/gazelle-fel/audit-coreelec-first-init.py` before proposing changes to the initial decoder factory; never treat a `--selftest` result as Android FEL playback.
+4. For each change: specify **what real capability becomes newly observable**, what would disprove the hypothesis, and how to undo it without risking existing modules. Require Android native output proof to move beyond P3.
+5. Commit passing *disabled* research in reviewable commits to the maintained Kodi branch. Maintain a single rolling decision in this file. Append links to detailed Cube3 technical reports only when needed; do not create a second competing master handoff.
+
+**Last focused decision (24 October 2026):** CE pinned code confirms genuine FEL classification **before** native decoder init and a distinct stream decoder + global CE controls. Fire OS original binary and live FD evidence point to a different early mode/paired decoder and Surface route. **Next step P1, not more standalone safety models.**

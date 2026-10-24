@@ -23,6 +23,7 @@ on:
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiProducerEpoch.h
       - tests/TestGazelleFELProducerEpoch.cpp
       - tests/TestGazelleActualKodiQueueHost.py
+      - tests/TestGazelleKodiQueueObjectLink.py
       - tests/TestGazelleKodiProducerStampSource.py
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h
       - xbmc/cores/VideoPlayer/DVDMessageQueue.cpp
@@ -124,6 +125,11 @@ jobs:
           set -euo pipefail
           python3 -S tests/TestGazelleActualKodiQueueHost.py
           python3 -S tests/TestGazelleActualKodiQueueHost.py --ubsan
+      - name: Link unmodified Kodi queue source and producer epoch (host shims)
+        run: |
+          set -euo pipefail
+          python3 -S tests/TestGazelleKodiQueueObjectLink.py
+          python3 -S tests/TestGazelleKodiQueueObjectLink.py --ubsan
       - name: Reject spoofed Android compiler commands (host-only)
         run: |
           set -euo pipefail

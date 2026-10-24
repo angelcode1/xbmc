@@ -32,16 +32,35 @@
 
 using namespace std::chrono_literals;
 
+// OFF BY DESIGN. This is a compiler-visible stock-codec lifecycle scaffold,
+// not FEL decoding or parser authorization. Do not flip until a real pre-create
+// libdovi check, queue lifecycle and target build are reviewed.
+namespace {
+constexpr bool kGazelleDeferredStockResearchEnabled = false;
+
+bool IsGazelleDeferredStockCandidate(const CDVDStreamInfo& hint)
+{
+  return kGazelleDeferredStockResearchEnabled &&
+         hint.codec == AV_CODEC_ID_HEVC &&
+         hint.hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION &&
+         hint.dovi.dv_profile == 7 && hint.dovi.el_present_flag &&
+         !hint.cryptoSession && !hint.dvd && !hint.stills;
+}
+} // namespace
+
 class CDVDMsgVideoCodecChange : public CDVDMsg
 {
 public:
-  CDVDMsgVideoCodecChange(const CDVDStreamInfo& hints, std::unique_ptr<CDVDVideoCodec> codec)
-    : CDVDMsg(GENERAL_STREAMCHANGE), m_codec(std::move(codec)), m_hints(hints)
+  CDVDMsgVideoCodecChange(const CDVDStreamInfo& hints, std::unique_ptr<CDVDVideoCodec> codec,
+                          bool gazelleDeferred = false)
+    : CDVDMsg(GENERAL_STREAMCHANGE), m_codec(std::move(codec)), m_hints(hints),
+      m_gazelleDeferred(gazelleDeferred)
   {}
   ~CDVDMsgVideoCodecChange() override = default;
 
   std::unique_ptr<CDVDVideoCodec> m_codec;
   CDVDStreamInfo  m_hints;
+  bool m_gazelleDeferred{false};
 };
 
 CVideoPlayerVideo::CVideoPlayerVideo(CDVDClock* pClock,
@@ -136,13 +155,17 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
       hint.codecOptions |= CODEC_ALLOW_FALLBACK;
     }
 
-    std::unique_ptr<CDVDVideoCodec> codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
-    if (!codec)
-    {
+    // Only the already-running video-worker stream-change path can stage a
+    // stock factory deferral. Initial OpenStream still uses the existing path.
+    const bool gazelleDeferred = IsGazelleDeferredStockCandidate(hint);
+    std::unique_ptr<CDVDVideoCodec> codec;
+    if (!gazelleDeferred)
+      codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
+    if (!codec && !gazelleDeferred)
       CLog::Log(LOGINFO, "CVideoPlayerVideo::OpenStream - could not open video codec");
-    }
 
-    SendMessage(std::make_shared<CDVDMsgVideoCodecChange>(hint, std::move(codec)), 0);
+    SendMessage(std::make_shared<CDVDMsgVideoCodecChange>(hint, std::move(codec),
+                                                          gazelleDeferred), 0);
   }
   else
   {
@@ -165,7 +188,9 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
   return true;
 }
 
-void CVideoPlayerVideo::OpenStream(CDVDStreamInfo& hint, std::unique_ptr<CDVDVideoCodec> codec)
+void CVideoPlayerVideo::OpenStream(CDVDStreamInfo& hint,
+                                   std::unique_ptr<CDVDVideoCodec> codec,
+                                   bool gazelleDeferStock)
 {
   CLog::Log(LOGDEBUG, "CVideoPlayerVideo::OpenStream - open stream with codec: {}",
             avcodec_get_name(hint.codec));
@@ -215,11 +240,12 @@ void CVideoPlayerVideo::OpenStream(CDVDStreamInfo& hint, std::unique_ptr<CDVDVid
   {
     // reuse old decoder
     codec = std::move(m_pVideoCodec);
+    gazelleDeferStock = false;
   }
 
   m_pVideoCodec.reset();
 
-  if (!codec)
+  if (!codec && !gazelleDeferStock)
   {
     CLog::Log(LOGINFO, "Creating video codec: {}", avcodec_get_name(hint.codec));
     hint.codecOptions |= CODEC_ALLOW_FALLBACK;
@@ -233,12 +259,33 @@ void CVideoPlayerVideo::OpenStream(CDVDStreamInfo& hint, std::unique_ptr<CDVDVid
   }
 
   m_pVideoCodec = std::move(codec);
+  m_gazelleDeferredStockOpen = gazelleDeferStock && !m_pVideoCodec;
+  if (m_gazelleDeferredStockOpen)
+    m_gazelleDeferredSince = std::chrono::steady_clock::now();
   m_hints = hint;
   m_stalled = m_messageQueue.GetPacketCount(CDVDMsg::DEMUXER_PACKET) == 0;
   m_rewindStalled = false;
   m_packets.clear();
   m_syncState = IDVDStreamPlayer::SYNC_STARTING;
   m_renderManager.ShowVideo(false);
+}
+
+bool CVideoPlayerVideo::GazelleEnsureDeferredStockCodec()
+{
+  if (!m_gazelleDeferredStockOpen)
+    return static_cast<bool>(m_pVideoCodec);
+  m_gazelleDeferredStockOpen = false; // one attempt only
+  CDVDStreamInfo hint = m_hints;
+  hint.codecOptions |= CODEC_ALLOW_FALLBACK;
+  // Never choose a FEL/OMX research alias here. Real trusted FEL/MEL RPU
+  // provenance and the Android decoder backend are both unimplemented.
+  m_pVideoCodec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
+  if (m_pVideoCodec)
+    return true;
+  CLog::Log(LOGERROR, "Gazelle disabled-research pending stock codec failed to open");
+  m_messageParent.Put(std::make_shared<CDVDMsg>(CDVDMsg::PLAYER_ABORT));
+  StopThread();
+  return false;
 }
 
 void CVideoPlayerVideo::CloseStream(bool bWaitForBuffers)
@@ -262,6 +309,7 @@ void CVideoPlayerVideo::CloseStream(bool bWaitForBuffers)
 
   CLog::Log(LOGINFO, "deleting video codec");
   m_pVideoCodec.reset();
+  m_gazelleDeferredStockOpen = false;
 
   if (m_picture.videoBuffer)
   {
@@ -362,6 +410,15 @@ void CVideoPlayerVideo::Process()
     }
     else if (ret == MSGQ_TIMEOUT)
     {
+      // A pending first-AU factory must not touch a null decoder on timeout.
+      // After a bounded interval, fall back to *stock* even with no packet.
+      if (m_gazelleDeferredStockOpen)
+      {
+        if (std::chrono::steady_clock::now() - m_gazelleDeferredSince < 500ms)
+          continue;
+        if (!GazelleEnsureDeferredStockCodec())
+          continue;
+      }
       if (m_outputSate == OUTPUT_AGAIN &&
           m_picture.videoBuffer)
       {
@@ -444,6 +501,8 @@ void CVideoPlayerVideo::Process()
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_RESET))
     {
+      if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())
+        continue;
       if(m_pVideoCodec)
         m_pVideoCodec->Reset();
 
@@ -460,6 +519,8 @@ void CVideoPlayerVideo::Process()
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_FLUSH)) // private message sent by (CVideoPlayerVideo::Flush())
     {
+      if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())
+        continue;
       bool sync = std::static_pointer_cast<CDVDMsgBool>(pMsg)->m_value;
       if(m_pVideoCodec)
         m_pVideoCodec->Reset();
@@ -511,7 +572,7 @@ void CVideoPlayerVideo::Process()
           break;
       }
 
-      OpenStream(msg->m_hints, std::move(msg->m_codec));
+      OpenStream(msg->m_hints, std::move(msg->m_codec), msg->m_gazelleDeferred);
       msg->m_codec = NULL;
       if (m_picture.videoBuffer)
       {
@@ -543,6 +604,10 @@ void CVideoPlayerVideo::Process()
     }
     else if (pMsg->IsType(CDVDMsg::DEMUXER_PACKET))
     {
+      // The existing shared_ptr message retains exact DemuxPacket ownership.
+      // This branch remains stock-only and cannot authorize FEL.
+      if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())
+        continue;
       DemuxPacket* pPacket = std::static_pointer_cast<CDVDMsgDemuxerPacket>(pMsg)->GetPacket();
       bool bPacketDrop = std::static_pointer_cast<CDVDMsgDemuxerPacket>(pMsg)->GetPacketDrop();
 

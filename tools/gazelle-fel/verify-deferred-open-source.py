@@ -70,6 +70,13 @@ def check(cpp: str, h: str, policy: str) -> None:
         timeout_gate in cpp and output_check in cpp
         and cpp.index(timeout_gate) < cpp.index(output_check)
     )
+    helper_start = cpp.find("bool CVideoPlayerVideo::GazelleEnsureDeferredStockCodec()")
+    helper_end = cpp.find("void CVideoPlayerVideo::CloseStream(", helper_start)
+    helper = cpp[helper_start:helper_end] if helper_start >= 0 and helper_end > helper_start else ""
+    guards["helper_never_joins_own_worker"] = (
+        bool(helper) and "m_bStop = true;" in helper
+        and "StopThread();" not in helper
+    )
     failed = [key for key, ok in guards.items() if not ok]
     if failed:
         raise AssertionError("GAZELLE_SOURCE_GATE_REFUSED " + ",".join(failed))
@@ -89,6 +96,8 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         (cpp.replace("GazelleDeferredOpenPolicy.h", "GazelleDeferredOpenPolicyMissing.h"), h, policy),
         (cpp, h.replace("bool m_gazelleDeferredStockOpen{false};", ""), policy),
         (cpp + "\n// OMX.gazelle.research\n", h, policy),
+        (cpp.replace("m_bStop = true;\n  return false;", "StopThread();\n  return false;"),
+         h, policy),
     ]
     for a, b, c in variants:
         try:
@@ -96,7 +105,7 @@ def selftest(cpp: str, h: str, policy: str) -> None:
         except AssertionError:
             continue
         raise AssertionError("NEGATIVE_MUTATION_ACCEPTED")
-    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=8 no_device=true")
+    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=9 no_device=true")
 
 
 def main() -> None:

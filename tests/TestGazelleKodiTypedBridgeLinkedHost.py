@@ -707,6 +707,16 @@ int main() {
     signal.notify_all();
     worker.join();
     assert(finished.load() && freed==2 && !fence.InFlightForAuditOnly());
+    // Native input-return is NOT enough: neither Kodi Reset() JNI flush nor
+    // renderer/output-pool retirement is proved by the packet lease token.
+    assert(fence.BarrierApplied(2,12)==Decision::Refused);
+    assert(fence.BeginNativeFlushProof(2));
+    assert(fence.BarrierApplied(2,12)==Decision::Refused);
+    assert(fence.ReportNativeFlush(2,true,true)==
+           GazelleFELPrecreate::QuiescenceStep::Recorded);
+    assert(fence.BarrierApplied(2,12)==Decision::Refused);
+    assert(fence.ReportRetiredOutputs(2,true,true)==
+           GazelleFELPrecreate::QuiescenceStep::Recorded);
     assert(fence.BarrierApplied(2,12)==Decision::Applied);
     assert(queue.GetDataSize()==0);
     fence.Close(); queue.End();
@@ -773,6 +783,8 @@ int main() {
             "inflight_lease_blocks_barrier_until_finish=true "
             "blocking_external_work_outside_fence_lock=true "
             "prequeued_priority10_retry_rejected_at_consume_fence=true "
+            "lease_finish_not_native_quiescence=true "
+            "native_jni_flush_and_renderer_witness_required=true "
             "external_platform_demux_shims=true "
             "no_real_worker=true no_device=true fel_switch_off=true");
 }

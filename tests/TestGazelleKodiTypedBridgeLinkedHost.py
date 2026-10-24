@@ -166,6 +166,51 @@ int main() {
     queue.End();
   }
 
+  // CRITICAL: Kodi's actual ProcessDecoderOutput() VC_FLUSHED/VC_REOPEN
+  // paths SendMessage(msg, 10). Priority 10 beats priority-1 GENERAL_FLUSH,
+  // including when the flush was already queued. A worker whose epoch is
+  // advanced ONLY on dequeuing that flush could wrongly admit an old packet
+  // first. The test demonstrates this ordering HAZARD; it does not claim
+  // that the current unwired owner gate handles it.
+  {
+    unsigned freed=0;
+    CDVDMessageQueue queue("gazelle-linked-priority-10-hazard");
+    queue.Init(); queue.SetMaxDataSize(10000);
+    Ingress ingress(queue);
+    auto old=Original(60,false,&freed);
+    auto* oldId=old.get();
+    assert(ingress.PutOriginal(old) && old->GetGazelleResearchEpoch()==1);
+    old.reset();
+    auto dequeued=NextPacket(queue); // normal input leaves accounting zero
+    assert(dequeued.get()==oldId && queue.GetDataSize()==0);
+    // Existing Kodi worker has now obtained this original message and may
+    // requeue it through the decoder-output retry path.
+    assert(ingress.PutBarrier([](std::uint64_t) {
+      return std::make_shared<CDVDMsg>(CDVDMsg::GENERAL_FLUSH);
+    }));
+    assert(ingress.ProducerEpochForAuditOnly()==2);
+    assert(queue.Put(dequeued,10)==MSGQ_OK);
+    dequeued.reset();
+    std::shared_ptr<CDVDMsg> next;
+    int priority=0;
+    assert(queue.Get(next,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(priority==10 && next.get()==oldId);
+    const auto oldAgain=std::static_pointer_cast<CDVDMsgDemuxerPacket>(next);
+    assert(oldAgain->GetGazelleResearchEpoch()==1);
+    // Producer knows epoch 2 already, but worker's PairOwners would still
+    // be at epoch 1 until the priority-1 control was processed. DO NOT pair.
+    next.reset();
+    assert(freed==0); // oldAgain still holds the original owner
+    assert(queue.Get(next,std::chrono::milliseconds(0),priority)==MSGQ_OK);
+    assert(priority==1 && next->IsType(CDVDMsg::GENERAL_FLUSH));
+    next.reset();
+    assert(freed==0);
+    assert(queue.GetDataSize()==0); // priority-10 retry is not ordinary bytes
+    // No destructor until the last original message owner goes away.
+    queue.End();
+    assert(freed==0);
+  }
+
   // In a real queue, a timed-out one-original hold leaves the queue's data
   // accounting at zero because its Get already subtracted the payload.
   // Re-adding through PutBack would increase byte count AGAIN and jump order.
@@ -197,7 +242,9 @@ int main() {
             "stale_bl_released=true pair_original_owners=true "
             "untagged_returns_held_and_incoming_stock=true "
             "protection_drop_veto=true direct_stock_once=true "
-            "queue_accounting_preserved=true external_platform_demux_shims=true "
+            "queue_accounting_preserved=true retry_priority_10_overtakes_flush_1=true "
+            "retry_before_barrier_requires_external_epoch_watermark=true "
+            "external_platform_demux_shims=true "
             "no_real_worker=true no_device=true fel_switch_off=true");
 }
 """

@@ -173,6 +173,29 @@ jobs:
           make -C tools/depends/target/cmakebuildsys BUILD_DIR="$BUILD_DIR" CMAKE_EXTRA_ARGUMENTS='-DCMAKE_EXPORT_COMPILE_COMMANDS=ON'
           test -s "$BUILD_DIR/compile_commands.json"
 
+      - name: Materialize Kodi internal FFmpeg before compiling direct translation units
+        shell: bash
+        run: |
+          set -euo pipefail
+          # FindFFMPEG.cmake's BUILD_DEP_TARGET creates "build-ffmpeg" and
+          # installs libavutil/pixfmt.h into Kodi's generated include tree.
+          # Direct compile_commands execution does not honor dependencies.
+          logfile="$RUNNER_TEMP/gazelle-ffmpeg-target.log"
+          if cmake --build "$BUILD_DIR" --target build-ffmpeg --parallel 2 >"$logfile" 2>&1; then
+            echo GAZELLE_ANDROID_FFMPEG_PREREQUISITE_PASS
+            tail -n 24 "$logfile"
+          else
+            code=$?
+            echo "::error::Kodi internal FFmpeg prerequisite failed before any of the requested TUs"
+            grep -E -i '(fatal error|error:|no space left|killed|failed)' "$logfile" | tail -n 55 || true
+            tail -n 90 "$logfile"
+            exit "$code"
+          fi
+          if ! find "$BUILD_DIR" -type f -path '*/libavutil/pixfmt.h' -print -quit | grep -q .; then
+            echo "::error::FFmpeg target returned success but libavutil/pixfmt.h is absent"
+            exit 1
+          fi
+
       - name: Compile exactly the two real Android Kodi translation units
         shell: bash
         run: |

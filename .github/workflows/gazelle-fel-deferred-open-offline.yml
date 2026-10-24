@@ -27,6 +27,8 @@ on:
       - tests/TestGazelleKodiQueueRealMessageHeaders.py
       - tests/TestGazelleKodiTypedBridgeLinkedHost.py
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateAdmission.h
+      - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELAwaitBarrierOwners.h
+      - tests/TestGazelleFELAwaitBarrierOwners.cpp
       - xbmc/cores/VideoPlayer/DVDCodecs/Video/GazelleFELPrecreateKodiBridge.h
       - xbmc/cores/VideoPlayer/DVDMessage.cpp
       - tests/TestGazelleKodiProducerStampSource.py
@@ -112,6 +114,19 @@ jobs:
             -fsanitize=undefined -fno-sanitize-recover=all \
             tests/TestGazelleFELPrecreateEpochQueue.cpp -o /tmp/gazelle-epoch-model-ubsan
           /tmp/gazelle-epoch-model-ubsan
+      - name: Test bounded await-barrier original-owner backpressure and deadline (host)
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleFELAwaitBarrierOwners.cpp -o /tmp/gazelle-await-barrier
+          /tmp/gazelle-await-barrier
+      - name: Repeat await-barrier ownership under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleFELAwaitBarrierOwners.cpp -o /tmp/gazelle-await-barrier-ubsan
+          /tmp/gazelle-await-barrier-ubsan
       - name: Verify Kodi-like producer-time original message stamp (C++17)
         run: |
           set -euo pipefail

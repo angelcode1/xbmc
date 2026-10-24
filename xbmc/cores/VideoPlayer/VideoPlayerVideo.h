@@ -20,6 +20,7 @@
 #include "utils/BitstreamStats.h"
 
 #include <atomic>
+#include <chrono>
 
 #define DROP_DROPPED 1
 #define DROP_VERYLATE 2

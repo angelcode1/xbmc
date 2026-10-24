@@ -39,7 +39,11 @@ def recoverable_prerequisite(compiler_output: str, already_attempted: set[str]) 
     """Return an explicitly audited target for one missing generated header."""
     import re
 
-    missing = re.findall(r"fatal error: '([^'\\n]+)' file not found", compiler_output)
+    missing = []
+    for line in compiler_output.splitlines():
+        match = re.search("fatal error: '([^']+)' file not found", line)
+        if match:
+            missing.append(match.group(1))
     if len(missing) != 1:
         return None
     target = GENERATED_HEADER_TARGETS.get(missing[0])

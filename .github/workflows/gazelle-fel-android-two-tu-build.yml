@@ -7,6 +7,8 @@ on:
     paths:
       - .github/workflows/gazelle-fel-android-two-tu-build.yml
       - tools/gazelle-fel/compile-android-kodi-tus.py
+      - tools/gazelle-fel/verify-deferred-open-source.py
+      - tests/TestGazelleDeferredStockPolicy.cpp
       - xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
       - xbmc/cores/VideoPlayer/VideoPlayerVideo.h
       - xbmc/cores/VideoPlayer/GazelleDeferredOpenPolicy.h
@@ -56,6 +58,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF_NAME" = research/gazelle-fel-deferred-open-offline-20261024
           python3 -S tools/gazelle-fel/verify-deferred-open-source.py
+          python3 -S tools/gazelle-fel/verify-deferred-open-source.py --selftest
           grep -Fxq 'VERSION=3.3.2' tools/depends/target/libdovi/LIBDOVI-VERSION
           echo GAZELLE_ANDROID_ARMV7_SOURCE_PIN_PASS
       - name: Set up Java 17

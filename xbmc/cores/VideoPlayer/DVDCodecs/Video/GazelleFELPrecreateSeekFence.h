@@ -13,6 +13,7 @@
 #include "GazelleFELAwaitBarrierOwners.h"
 #include "GazelleFELPrecreateAdmission.h"
 #include "GazelleFELPrecreateDispatchLease.h"
+#include "GazelleFELNativeQuiescenceGate.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -96,6 +97,13 @@ public:
         m_applied == std::numeric_limits<std::uint64_t>::max() ||
         epoch != m_applied + 1 || epoch > m_published)
       return FenceDecision::Refused;
+    // A lease's ordinary C++ return does not prove JNI flush or renderer
+    // buffer quiescence. This extra witness is SYNTHETIC and UNWIRED;
+    // real Kodi currently supplies none of its three required signals.
+    if (m_native.NeedsNativeProof() && !m_native.Ready(epoch))
+      return FenceDecision::Refused;
+    if (m_native.NeedsNativeProof() && !m_native.Consume(epoch))
+      return FenceDecision::Refused;
     m_applied = epoch;
     m_holder.DropSuperseded(m_published, m_applied, nowTicks);
     return FenceDecision::Applied;
@@ -166,9 +174,18 @@ public:
   typename Dispatch::Started BeginOriginalLease() noexcept
   {
     std::lock_guard<std::mutex> guard(m_mutex);
-    if (m_closed || m_published != m_applied)
+    if (m_closed || m_published != m_applied ||
+        m_native.NeedsNativeProof())
       return {};
-    return m_dispatch.Begin(m_published);
+    auto started = m_dispatch.Begin(m_published);
+    if (started && !m_native.InputStarted(started.epoch))
+    {
+      // The host model must not silently misrepresent a begun decoder
+      // operation as cancellable if the native witness refuses it.
+      m_dispatch.Finish(started.token);
+      return {};
+    }
+    return started;
   }
 
   // Release the modeled in-flight lease marker after the external caller
@@ -178,7 +195,39 @@ public:
   bool FinishOriginalLease(std::uint64_t token) noexcept
   {
     std::lock_guard<std::mutex> guard(m_mutex);
-    return m_dispatch.Finish(token);
+    const auto epoch = m_dispatch.InFlightEpoch();
+    if (!m_dispatch.Finish(token))
+      return false;
+    return m_native.InputReturned(epoch);
+  }
+
+  // No JNI call is made here. These methods record simulated independent
+  // witnesses under the same publication fence; real Kodi cannot use them
+  // until the MediaCodec and renderer lifetimes are separately instrumented.
+  bool BeginNativeFlushProof(std::uint64_t targetEpoch) noexcept
+  {
+    std::lock_guard<std::mutex> guard(m_mutex);
+    if (m_closed || m_dispatch.InFlight() || targetEpoch != m_applied + 1 ||
+        targetEpoch > m_published)
+      return false;
+    return m_native.BeginFlushProof(targetEpoch);
+  }
+
+  QuiescenceStep ReportNativeFlush(std::uint64_t epoch,
+                                   bool callReturned,
+                                   bool jniExceptionFree) noexcept
+  {
+    std::lock_guard<std::mutex> guard(m_mutex);
+    return m_native.ReportNativeFlush(epoch, callReturned, jniExceptionFree);
+  }
+
+  QuiescenceStep ReportRetiredOutputs(std::uint64_t epoch,
+                                      bool poolDetached,
+                                      bool rendererReferencesReleased) noexcept
+  {
+    std::lock_guard<std::mutex> guard(m_mutex);
+    return m_native.ReportOutputRetired(
+        epoch, poolDetached, rendererReferencesReleased);
   }
 
   bool InFlightForAuditOnly() const
@@ -285,6 +334,7 @@ public:
     m_closed = true;
     m_holder.Close();
     m_dispatch.Close();
+    m_native.Close();
   }
 
 private:
@@ -292,6 +342,7 @@ private:
   mutable std::mutex m_mutex;
   Hold m_holder;
   Dispatch m_dispatch;
+  NativeQuiescenceGate m_native;
   std::uint64_t m_published;
   std::uint64_t m_applied;
   bool m_closed{false};

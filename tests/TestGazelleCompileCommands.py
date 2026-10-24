@@ -60,7 +60,7 @@ with tempfile.TemporaryDirectory() as temp:
     run(bad, False, "NOT_ANDROID_ARMV7_COMMAND")
     bad = json.loads(json.dumps(entries))
     bad[1]["file"] = str(wrong_source)
-    run(bad, False, "WRONG_COMPILED_SOURCE")
+    run(bad, False, "COMPILATION_UNIT_NOT_UNIQUE")
     bad = json.loads(json.dumps(entries))
     bad[0]["arguments"][-1] = str(root / "fake.txt")
     run(bad, False, "NOT_OBJECT_OUTPUT")

@@ -7,6 +7,7 @@
  */
 
 #include "VideoPlayerVideo.h"
+#include "GazelleDeferredOpenPolicy.h"
 
 #include "DVDCodecs/DVDCodecUtils.h"
 #include "DVDCodecs/DVDFactoryCodec.h"
@@ -32,19 +33,22 @@
 
 using namespace std::chrono_literals;
 
-// OFF BY DESIGN. This is a compiler-visible stock-codec lifecycle scaffold,
-// not FEL decoding or parser authorization. Do not flip until a real pre-create
-// libdovi check, queue lifecycle and target build are reviewed.
+// Production switch is compile-time false in GazelleDeferredOpenPolicy.h.
+// This maps only existing Kodi hint fields into a *scheduling candidate*.
+// It never authenticates FEL or authorizes any research codec name.
 namespace {
-constexpr bool kGazelleDeferredStockResearchEnabled = false;
-
 bool IsGazelleDeferredStockCandidate(const CDVDStreamInfo& hint)
 {
-  return kGazelleDeferredStockResearchEnabled &&
-         hint.codec == AV_CODEC_ID_HEVC &&
-         hint.hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION &&
-         hint.dovi.dv_profile == 7 && hint.dovi.el_present_flag &&
-         !hint.cryptoSession && !hint.dvd && !hint.stills;
+  const KODI::VIDEO::GAZELLE::DeferredStockInputs inputs{
+      hint.codec == AV_CODEC_ID_HEVC,
+      hint.hdrType == StreamHdrType::HDR_TYPE_DOLBYVISION,
+      hint.dovi.dv_profile == 7,
+      hint.dovi.el_present_flag != 0,
+      static_cast<bool>(hint.cryptoSession),
+      hint.dvd,
+      hint.stills,
+      true};
+  return KODI::VIDEO::GAZELLE::UseDeferredStock(inputs);
 }
 } // namespace
 

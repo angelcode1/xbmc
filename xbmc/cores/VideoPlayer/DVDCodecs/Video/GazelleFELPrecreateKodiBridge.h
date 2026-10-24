@@ -65,11 +65,13 @@ inline Gate::Result ObserveOriginal(
     Gate& gate, Owner original, bool streamProtected) noexcept
 {
   const auto info = BorrowInfo(original, streamProtected);
-  // A 0-generation owner came from ordinary stock Kodi; it can never
-  // authenticate a seek-epoch BL/EL pair. Fail closed, no cloning/replay.
+  // A 0-generation owner came from ordinary stock Kodi; it cannot
+  // authenticate a seek-epoch BL/EL pair. Fail closed, releasing any held
+  // same-epoch message for stock FIRST. An untagged message must not leave a
+  // previous layer held to be paired with some later, unrelated packet.
   if (info.epoch == 0)
-    return {GazelleFELPrecreate::Disposition::StockFallback, {},
-            std::move(original)};
+    return {GazelleFELPrecreate::Disposition::StockFallback,
+            gate.TakeForStock(gate.Epoch()), std::move(original)};
   return gate.Observe(std::move(original), info);
 }
 } // namespace GazelleFELPrecreateKodi

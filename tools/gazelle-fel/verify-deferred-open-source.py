@@ -1,90 +1,119 @@
 #!/usr/bin/env python3
-"""Source regression gate for the OFF-by-default Kodi video worker FEL scaffold.
+"""Fail-closed source checks for the NON-DEPLOYABLE Kodi deferred-open scaffold.
 
-Does NOT compile Kodi, load libdovi, access a Cube, or prove thread correctness.
-Read-only check of two pinned source files in this exact checkout.
+Checks the actual VideoPlayerVideo.cpp plus the compiled shared header.
+Not an Android build, libdovi integration, or Kodi lifecycle proof.
 """
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[2]
 CPP = Path("xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp")
 HEADER = Path("xbmc/cores/VideoPlayer/VideoPlayerVideo.h")
+POLICY = Path("xbmc/cores/VideoPlayer/GazelleDeferredOpenPolicy.h")
 
 
-def check(cpp: str, header: str) -> None:
-    markers = {
-        "feature_explicitly_off":
-            "constexpr bool kGazelleDeferredStockResearchEnabled = false;" in cpp and
-            "constexpr bool kGazelleDeferredStockResearchEnabled = true;" not in cpp,
-        "candidate_requires_clear_p7":
-            "hint.dovi.dv_profile == 7 && hint.dovi.el_present_flag" in cpp and
-            "!hint.cryptoSession && !hint.dvd && !hint.stills" in cpp,
-        "existing_initial_factory":
+def check(cpp: str, h: str, policy: str) -> None:
+    guards = {
+        "disabled_shared_policy":
+            "constexpr bool kDeferredStockResearchEnabled = false;" in policy
+            and "constexpr bool kDeferredStockResearchEnabled = true;" not in policy,
+        "compile_time_assert_disabled":
+            'static_assert(!kDeferredStockResearchEnabled' in policy,
+        "worker_imports_compiled_policy":
+            '#include "GazelleDeferredOpenPolicy.h"' in cpp
+            and "KODI::VIDEO::GAZELLE::UseDeferredStock(inputs)" in cpp,
+        "candidate_without_implicit_fel":
+            "hint.dovi.dv_profile == 7" in cpp
+            and "hint.dovi.el_present_flag != 0" in cpp
+            and "hint.cryptoSession" in cpp
+            and "hint.dvd" in cpp
+            and "hint.stills" in cpp,
+        "initial_stream_factory_preserved":
             "std::unique_ptr<CDVDVideoCodec> codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);" in cpp,
-        "stock_only_factory":
+        "stock_only_worker_factory":
             "m_pVideoCodec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);" in cpp,
-        "stock_after_timeout":
-            "std::chrono::steady_clock::now() - m_gazelleDeferredSince < 500ms" in cpp,
-        "own_worker_state":
-            "bool m_gazelleDeferredStockOpen{false};" in header,
-        "safe_packet_gate":
-            "if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())" in cpp and
-            cpp.index("if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())\n        continue;\n      DemuxPacket* pPacket =") <
-            cpp.index("m_pVideoCodec->SetCodecControl(codecControl);"),
-        "timeout_before_output_deref":
-            cpp.index("if (m_gazelleDeferredStockOpen)\n      {") <
-            cpp.index("if (m_outputSate == OUTPUT_AGAIN &&"),
+        "worker_state_declared":
+            "bool m_gazelleDeferredStockOpen{false};" in h,
+        "timeout_deadline":
+            "m_gazelleDeferredSince < 500ms" in cpp,
+        "packet_guard_before_codec_call":
+            "if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())" in cpp
+            and "DemuxPacket* pPacket =" in cpp,
         "flush_guard":
-            "if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())\n        continue;\n      bool sync =" in cpp,
+            "if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())" in cpp
+            and "CDVDMsg::GENERAL_FLUSH" in cpp,
         "reset_guard":
-            "if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())\n        continue;\n      if(m_pVideoCodec)" in cpp,
-        "no_alias_routing":
-            "OMX.gazelle.research" not in cpp and
-            "GAZELLE_FEL_ENABLE" not in cpp,
-        "one_codec_worker_event":
+            "CDVDMsg::GENERAL_RESET" in cpp,
+        "stock_only_no_alias":
+            "OMX.gazelle.research" not in cpp
+            and "GAZELLE_FEL_ENABLE" not in cpp,
+        "worker_message_passes_defer_flag":
             "OpenStream(msg->m_hints, std::move(msg->m_codec), msg->m_gazelleDeferred);" in cpp,
     }
-    failed = [key for key, ok in markers.items() if not ok]
+    packet_gate = (
+        "if (m_gazelleDeferredStockOpen && !GazelleEnsureDeferredStockCodec())\n"
+        "        continue;\n"
+        "      DemuxPacket* pPacket ="
+    )
+    if packet_gate in cpp and "m_pVideoCodec->SetCodecControl(codecControl);" in cpp:
+        guards["packet_guard_before_codec_call"] &= (
+            cpp.index(packet_gate) < cpp.index("m_pVideoCodec->SetCodecControl(codecControl);")
+        )
+    else:
+        guards["packet_guard_before_codec_call"] = False
+    timeout_gate = "if (m_gazelleDeferredStockOpen)\n      {"
+    output_check = "if (m_outputSate == OUTPUT_AGAIN &&"
+    guards["timeout_before_output"] = (
+        timeout_gate in cpp and output_check in cpp
+        and cpp.index(timeout_gate) < cpp.index(output_check)
+    )
+    failed = [key for key, ok in guards.items() if not ok]
     if failed:
-        raise AssertionError("REFUSED_SOURCE_CONTRACT:" + ",".join(failed))
+        raise AssertionError("GAZELLE_SOURCE_GATE_REFUSED " + ",".join(failed))
 
 
-def selftest(cpp: str, h: str) -> None:
-    check(cpp, h)
-    mutated = [
-        (cpp.replace("kGazelleDeferredStockResearchEnabled = false",
-                     "kGazelleDeferredStockResearchEnabled = true"), h),
+def selftest(cpp: str, h: str, policy: str) -> None:
+    check(cpp, h, policy)
+    variants = [
+        (cpp, h, policy.replace("kDeferredStockResearchEnabled = false",
+                                "kDeferredStockResearchEnabled = true")),
+        (cpp, h, policy.replace("static_assert(!kDeferredStockResearchEnabled",
+                                "static_assert(kDeferredStockResearchEnabled")),
+        (cpp.replace("KODI::VIDEO::GAZELLE::UseDeferredStock(inputs)", "false"), h, policy),
         (cpp.replace("m_pVideoCodec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);",
-                     "m_pVideoCodec.reset();"), h),
-        (cpp.replace("m_gazelleDeferredSince < 500ms", "m_gazelleDeferredSince < 5s"), h),
-        (cpp.replace("OMX.gazelle.research", "ignored") + "\n// OMX.gazelle.research", h),
-        (cpp, h.replace("bool m_gazelleDeferredStockOpen{false};", "")),
+                     "m_pVideoCodec.reset();"), h, policy),
+        (cpp.replace("m_gazelleDeferredSince < 500ms", "m_gazelleDeferredSince < 5s"), h, policy),
+        (cpp.replace("GazelleDeferredOpenPolicy.h", "GazelleDeferredOpenPolicyMissing.h"), h, policy),
+        (cpp, h.replace("bool m_gazelleDeferredStockOpen{false};", ""), policy),
+        (cpp + "\n// OMX.gazelle.research\n", h, policy),
     ]
-    for badcpp, badh in mutated:
+    for a, b, c in variants:
         try:
-            check(badcpp, badh)
-        except (AssertionError, ValueError):
+            check(a, b, c)
+        except AssertionError:
             continue
         raise AssertionError("NEGATIVE_MUTATION_ACCEPTED")
-    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=5")
+    print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_SELFTEST_PASS negative=8 no_device=true")
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--selftest", action="store_true")
-    args = ap.parse_args()
-    root = Path(__file__).resolve().parents[2]
-    cpp = (root / CPP).read_text(encoding="utf-8")
-    h = (root / HEADER).read_text(encoding="utf-8")
+    arg = argparse.ArgumentParser(description=__doc__)
+    arg.add_argument("--selftest", action="store_true")
+    args = arg.parse_args()
+    cpp = (ROOT / CPP).read_text(encoding="utf-8")
+    h = (ROOT / HEADER).read_text(encoding="utf-8")
+    policy = (ROOT / POLICY).read_text(encoding="utf-8")
     if args.selftest:
-        selftest(cpp, h)
+        selftest(cpp, h, policy)
     else:
-        check(cpp, h)
+        check(cpp, h, policy)
         print("GAZELLE_KODI_DEFERRED_OPEN_SOURCE_AUDIT_PASS "
-              "feature_enabled=false stock_only=true "
-              "first_au_parser=NOT_CONNECTED target_compile=NOT_TESTED "
-              "on_device=NOT_TESTED")
+              "feature_enabled=false stock_only=true first_au_parser=NOT_CONNECTED "
+              "full_kodi_build=NOT_TESTED on_device=NOT_TESTED")
+
+
 if __name__ == "__main__":
     main()

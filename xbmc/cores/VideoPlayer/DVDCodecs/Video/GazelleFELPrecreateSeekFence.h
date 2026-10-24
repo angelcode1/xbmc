@@ -45,7 +45,7 @@ public:
   explicit SeekFence(Queue& queue, std::uint64_t maxWaitTicks,
                      std::uint64_t initialEpoch = 1)
       : m_queue(queue), m_holder(maxWaitTicks), m_published(initialEpoch),
-        m_applied(initialEpoch)
+        m_applied(initialEpoch), m_closed(initialEpoch == 0)
   {
   }
 
@@ -85,7 +85,9 @@ public:
                                std::uint64_t nowTicks)
   {
     std::lock_guard<std::mutex> guard(m_mutex);
-    if (m_closed || epoch != m_applied + 1 || epoch > m_published)
+    if (m_closed || epoch == 0 ||
+        m_applied == std::numeric_limits<std::uint64_t>::max() ||
+        epoch != m_applied + 1 || epoch > m_published)
       return FenceDecision::Refused;
     m_applied = epoch;
     m_holder.DropSuperseded(m_published, m_applied, nowTicks);

@@ -1,0 +1,51 @@
+name: Gazelle FEL deferred-open source-only CI
+
+on:
+  push:
+    branches:
+      - research/gazelle-fel-deferred-open-offline-20261024
+    paths:
+      - .github/workflows/gazelle-fel-deferred-open-offline.yml
+      - xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp
+      - xbmc/cores/VideoPlayer/VideoPlayerVideo.h
+      - xbmc/cores/VideoPlayer/GazelleDeferredOpenPolicy.h
+      - tests/TestGazelleDeferredStockPolicy.cpp
+      - tools/gazelle-fel/verify-deferred-open-source.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Refuse unsafe source modification
+        run: |
+          set -euo pipefail
+          python3 -S tools/gazelle-fel/verify-deferred-open-source.py --selftest
+          python3 -S tools/gazelle-fel/verify-deferred-open-source.py
+      - name: Compile real shared Kodi scheduling policy as C++17
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -pedantic \
+            tests/TestGazelleDeferredStockPolicy.cpp -o /tmp/gazelle-deferred-policy
+          /tmp/gazelle-deferred-policy
+      - name: Repeat under UBSan
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            tests/TestGazelleDeferredStockPolicy.cpp -o /tmp/gazelle-deferred-ubsan
+          /tmp/gazelle-deferred-ubsan
+      - name: Explicit limitation notice
+        run: |
+          echo 'GAZELLE_KODI_DEFERRED_OFFLINE_CI_PASS compiled_shared_policy=true'
+          echo 'FULL_KODI_ANDROID_BUILD=NOT_TESTED'
+          echo 'MEDIACODEC_RUNTIME=NOT_TESTED'
+          echo 'FEL_RPU_PARSER=NOT_CONNECTED'
+          echo 'CUBE_UNTOUCHED=true'
